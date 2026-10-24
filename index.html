@@ -1,0 +1,4430 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ПОСЛЕДНЯЯ СИМУЛЯЦИЯ · 3D</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --accent:#8fe0b0;--accent-soft:#3f7a5c;--accent-bright:#bff5d5;
+    --panel:#04070a;--border:#1e4a35;--warning:#e0603a;
+  }
+  html,body{height:100%}
+  body{
+    background:#05070a;color:var(--accent);
+    font-family:"Courier New",Courier,monospace;
+    font-size:15px;line-height:1.55;overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  body.phase-substrate{--accent:#82e8bc;--accent-soft:#347a59;--accent-bright:#d1ffea}
+  body.phase-physical{--accent:#a7d8e8;--accent-soft:#557c89;--accent-bright:#e4f7ff;--border:#28505c}
+  body.phase-substrate #crt{opacity:.58}
+  body.phase-physical #crt{opacity:.16}
+  body.phase-physical #vignette{background:radial-gradient(ellipse at 50% 50%,transparent 42%,rgba(0,0,0,.62) 100%)}
+  body.phase-physical #crosshair{background:#c8eff7;box-shadow:0 0 8px #5d9baa}
+  body.checksum-broken #crt{opacity:.58;animation:crtDrift 8s steps(2) infinite}
+  @keyframes crtDrift{0%,96%,100%{transform:none}97%{transform:translateX(2px)}98%{transform:translateX(-3px)}99%{transform:translateX(1px)}}
+  #game{position:fixed;inset:0}
+  #game canvas{display:block;width:100%;height:100%;touch-action:none}
+  #vignette{
+    position:fixed;inset:0;pointer-events:none;z-index:20;
+    background:radial-gradient(ellipse at 50% 50%,transparent 30%,rgba(0,0,0,.78) 100%);
+  }
+  #crt{
+    position:fixed;inset:0;pointer-events:none;z-index:21;opacity:.42;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px);
+  }
+  #hud{
+    position:fixed;top:0;left:0;right:0;z-index:30;
+    display:flex;gap:22px;align-items:center;
+    padding:11px 20px 18px;font-size:11.5px;letter-spacing:1.4px;color:#3f7a5c;
+    background:linear-gradient(#05070af2,#05070a00);pointer-events:none;
+  }
+  #hud b{color:#7fd6a5;font-weight:normal}
+  #hud i{font-style:normal}
+  #hud b.bad{color:#e0603a;animation:blink 1.1s steps(2) infinite}
+  body.phase-physical #hud b{color:#a7d8e8}
+  body.phase-physical #hud b.bad{color:#ff956f}
+  #logBtn{margin-left:auto;cursor:pointer;pointer-events:auto;color:#3f7a5c;transition:.15s}
+  #logBtn:hover{color:#8fe0b0}
+  @keyframes blink{50%{opacity:.25}}
+  #objective{
+    position:fixed;top:44px;left:20px;z-index:30;max-width:min(680px,88vw);
+    color:var(--accent-soft);font-size:11px;letter-spacing:1.2px;line-height:1.45;
+    text-shadow:0 1px 5px #000;pointer-events:none;transition:color .25s,opacity .25s;
+  }
+  #objective b{color:var(--accent-bright);font-weight:normal}
+  #scanReadout{
+    position:fixed;left:50%;top:64%;transform:translate(-50%,8px);z-index:31;
+    min-width:220px;padding:7px 12px;border:1px solid var(--border);background:#03090bd9;
+    color:var(--accent-bright);text-align:center;font-size:11px;letter-spacing:1.4px;
+    opacity:0;transition:.18s;pointer-events:none;
+  }
+  #scanReadout.show{opacity:1;transform:translate(-50%,0)}
+  #crosshair{
+    position:fixed;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;
+    border-radius:50%;background:#9fe8c2;box-shadow:0 0 8px #3fa777;z-index:29;
+    pointer-events:none;transition:width .12s,height .12s,margin .12s,opacity .2s;opacity:.8;
+  }
+  #crosshair.active{width:11px;height:11px;margin:-5.5px 0 0 -5.5px;background:#d4ffe8;box-shadow:0 0 16px #7ff0c8}
+  #prompt{
+    position:fixed;left:50%;top:57%;transform:translateX(-50%);z-index:30;
+    padding:7px 16px;border:1px solid #1e4a35;background:rgba(3,10,7,.8);
+    color:#bff5d5;font-size:13.5px;letter-spacing:.6px;opacity:0;transition:opacity .16s;
+    pointer-events:none;white-space:nowrap;
+  }
+  #prompt.show{opacity:1}
+  #subtitles{
+    position:fixed;left:50%;bottom:36px;transform:translateX(-50%);z-index:28;
+    width:min(840px,93vw);max-height:41vh;overflow:hidden;pointer-events:none;
+    font-size:14.5px;line-height:1.5;text-shadow:0 1px 3px #000,0 0 14px #000;
+  }
+  #subtitles div{margin-bottom:6px;opacity:0;animation:fade .3s forwards}
+  #subtitles div.sys{color:#4d9270;font-size:13px;letter-spacing:.4px}
+  #subtitles div.err{color:#e0603a;font-size:13.5px;letter-spacing:.4px}
+  #subtitles div.thought{color:#7fb9d6;font-style:italic}
+  #subtitles div.gap{height:5px;margin:0}
+  @keyframes fade{to{opacity:1}}
+  #hint{
+    position:fixed;left:20px;bottom:10px;z-index:30;pointer-events:none;
+    font-size:10.5px;letter-spacing:1.1px;color:#2c5a44;
+  }
+  #hint b{color:#4d9270;font-weight:normal}
+  #lockHint{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;
+    padding:12px 24px;border:1px solid #1e4a35;background:#04070aee;color:#7fd6a5;
+    font-size:12px;letter-spacing:2px;opacity:0;pointer-events:none;transition:opacity .2s;
+    white-space:nowrap;
+  }
+  #lockHint.show{opacity:1}
+  #journal{
+    position:fixed;top:0;right:0;width:min(440px,100%);height:100%;z-index:70;
+    background:#04070a;border-left:1px solid #1e4a35;
+    transform:translateX(101%);transition:transform .26s ease;
+    display:flex;flex-direction:column;box-shadow:-12px 0 44px rgba(0,0,0,.75);
+  }
+  #journal.open{transform:translateX(0)}
+  .jHead{
+    padding:15px 18px;border-bottom:1px solid #14291f;
+    font-size:12px;letter-spacing:2px;color:#3f7a5c;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .jHead span{color:#2c5a44;font-size:10.5px;letter-spacing:1px}
+  #journalClose{
+    border:0;background:transparent;color:#4d9270;font:inherit;font-size:11px;
+    letter-spacing:1px;cursor:pointer;padding:4px 0;
+  }
+  #journalClose:hover,#journalClose:focus-visible{color:#bff5d5;outline:none}
+  #journalBody{flex:1;overflow-y:auto;padding:15px 18px;scrollbar-width:thin}
+  .logItem{margin-bottom:19px;border-left:2px solid #1e4a35;padding-left:12px}
+  .logItem h4{font-size:12px;color:#c9a227;letter-spacing:1px;margin-bottom:5px;font-weight:normal}
+  .logItem p{font-size:13px;color:#6aa98a;line-height:1.55}
+  .logEmpty{color:#2c5a44;font-size:13px;font-style:italic}
+  #modal{
+    position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;
+    background:rgba(2,5,7,.82);padding:18px;
+  }
+  #modal.open{display:flex}
+  #modalBox{
+    width:min(780px,94vw);max-height:86vh;overflow:auto;background:#04080a;
+    border:1px solid #1e4a35;padding:20px 24px;box-shadow:0 0 70px #000;
+  }
+  #modalTitle{font-size:12px;letter-spacing:2px;color:#c9a227;margin-bottom:14px}
+  #modalBody{font-size:13.5px;color:#7fb99a;line-height:1.6}
+  #modalBody div{white-space:pre-wrap;min-height:2px}
+  #modalBody div.sys{color:#4d9270;font-size:13px}
+  #modalBody div.err{color:#e0603a}
+  #modalBody div.thought{color:#7fb9d6;font-style:italic}
+  #modalOptions{display:flex;flex-direction:column;gap:7px;margin-top:16px}
+  #modalOptions button{
+    background:transparent;border:1px solid #1e4a35;color:#8fe0b0;
+    font-family:inherit;font-size:13.5px;text-align:left;padding:9px 14px;cursor:pointer;
+    transition:.14s;letter-spacing:.3px;
+  }
+  #modalOptions button:hover{background:#0c2318;border-color:#3fa777;color:#c9ffe2}
+  #modalOptions .key{color:#c9a227;margin-right:6px}
+  #overlay{
+    position:fixed;inset:0;z-index:90;background:#030607;display:none;
+    padding:6vh 5vw;overflow:hidden;flex-direction:column;justify-content:center;
+  }
+  #overlay.open{display:flex}
+  #overlayInner{
+    width:min(820px,100%);margin:0 auto;max-height:78vh;overflow:auto;
+    white-space:pre-wrap;font-size:14.5px;line-height:1.65;color:#8fe0b0;
+    scrollbar-width:thin;
+  }
+  #overlayInner div{margin-bottom:5px}
+  #overlayInner div.sys{color:#4d9270;font-size:13px}
+  #overlayInner div.err{color:#e0603a}
+  #overlayInner div.thought{color:#7fb9d6;font-style:italic}
+  #overlayInner div.gap{height:8px}
+  #overlayButtons{width:min(820px,100%);margin:16px auto 0;display:none;flex-direction:column;gap:8px}
+  #overlayButtons.show{display:flex}
+  #overlayButtons button{
+    background:transparent;border:1px solid #1e4a35;color:#8fe0b0;
+    font-family:inherit;font-size:14px;text-align:left;padding:10px 16px;cursor:pointer;
+    transition:.14s;letter-spacing:.4px;
+  }
+  #overlayButtons button:hover{background:#0c2318;border-color:#3fa777;color:#c9ffe2}
+  #start{
+    position:fixed;inset:0;z-index:100;
+    background:radial-gradient(ellipse at 50% 40%,#0a1a13 0%,#030507 72%);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:18px;text-align:center;padding:24px;transition:opacity .6s;
+  }
+  #start.hidden{opacity:0;pointer-events:none}
+  #start h1{
+    font-size:clamp(21px,4.6vw,42px);letter-spacing:5px;color:#bff5d5;font-weight:normal;
+    text-shadow:0 0 30px #2f8a63,0 0 90px #1e4a35;
+  }
+  #start .sub{font-size:11.5px;letter-spacing:5px;color:#3f7a5c}
+  #start .desc{max-width:560px;font-size:13px;color:#5c9c7b;line-height:1.7}
+  #start .keys{font-size:11px;letter-spacing:1px;color:#2c5a44;line-height:1.9}
+  #start .keys b{color:#6aa98a;font-weight:normal}
+  #start .loadNote{font-size:11px;color:#7a3a2a;letter-spacing:1px;min-height:16px}
+  .startActions{display:flex;flex-wrap:wrap;justify-content:center;gap:9px;margin-top:6px}
+  #startBtn,#continueBtn{
+    margin-top:6px;background:transparent;border:1px solid #3fa777;color:#bff5d5;
+    font-family:inherit;font-size:14px;letter-spacing:3px;padding:13px 34px;cursor:pointer;
+    transition:.2s;
+  }
+  #startBtn:hover,#continueBtn:hover{background:#0c2318;box-shadow:0 0 30px rgba(63,167,119,.35);color:#e2fff1}
+  #continueBtn{border-color:#c9a227;color:#f0d879}
+  #continueBtn:hover{background:#261f08;box-shadow:0 0 30px rgba(201,162,39,.25)}
+  #start button:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+  #saveNote{font-size:10.5px;color:#4d9270;letter-spacing:1px;min-height:15px}
+  [hidden]{display:none!important}
+  #transitionFlash{
+    position:fixed;inset:0;z-index:89;pointer-events:none;opacity:0;
+    background:linear-gradient(100deg,transparent 0 35%,rgba(115,255,193,.24) 46%,rgba(255,255,255,.62) 50%,transparent 62%);
+    mix-blend-mode:screen;
+  }
+  #transitionFlash.pulse{animation:flashPulse .62s steps(2)}
+  @keyframes flashPulse{0%{opacity:0;transform:translateX(-12%)}18%{opacity:1}48%{opacity:.35;transform:translateX(9%)}100%{opacity:0;transform:translateX(14%)}}
+  #touchControls{display:none;position:fixed;inset:0;z-index:40;pointer-events:none;transition:opacity .2s}
+  #touchControls.blocked{opacity:.2}
+  #movePad{
+    position:absolute;left:20px;bottom:24px;width:124px;height:124px;border-radius:50%;
+    border:1px solid #3f7a5c;background:#03100bb0;pointer-events:auto;touch-action:none;
+  }
+  #moveKnob{
+    position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px;border-radius:50%;
+    border:1px solid #70c99d;background:#123626cc;box-shadow:0 0 18px #1b5b40;
+  }
+  #touchActions{position:absolute;right:18px;bottom:22px;display:grid;grid-template-columns:repeat(2,58px);gap:10px;pointer-events:auto}
+  #touchActions button{
+    width:58px;height:50px;border:1px solid #3f7a5c;background:#04100ccc;color:#9de4bc;
+    font:12px "Courier New",monospace;letter-spacing:.5px;touch-action:manipulation;
+  }
+  #touchActions #touchUse{height:66px;grid-row:span 2;border-color:#79d4a8;color:#d7ffe9}
+  #ariaLive{position:fixed;left:-9999px;width:1px;height:1px;overflow:hidden}
+  button:focus-visible{outline:1px solid #bff5d5;outline-offset:2px}
+  @media(max-width:600px){
+    #hud{gap:10px;font-size:10px;padding:9px 12px 14px}
+    body{font-size:14px}
+    #subtitles{font-size:13.5px;bottom:30px}
+    #hint{display:none}
+    #objective{top:40px;left:12px;font-size:10px}
+    #start .sub{letter-spacing:2.5px}
+    #startBtn,#continueBtn{width:min(310px,86vw);margin-top:0}
+  }
+  @media(pointer:coarse){#touchControls{display:block}#subtitles{bottom:154px;max-height:34vh}}
+  @media(prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  }
+</style>
+<link rel="stylesheet" href="./interface.css">
+</head>
+<body>
+<div id="game"></div>
+<div id="vignette"></div>
+<div id="crt"></div>
+
+<div id="hud">
+  <span><i id="runLabel">ПРОГОН</i> <b id="run">000001</b></span>
+  <span><i id="awLabel">ОСОЗНАНИЕ</i> <b id="aw">0%</b></span>
+  <span><i id="chkLabel">ЦЕЛОСТНОСТЬ</i> <b id="chk">OK</b></span>
+  <div class="hudTools">
+    <button id="logBtn" aria-label="Открыть журнал">ЖУРНАЛ [J] <b id="logCount">0</b></button>
+    <button id="pauseBtn" aria-label="Пауза и настройки">МЕНЮ [ESC]</button>
+  </div>
+</div>
+<div id="objective">ЦЕЛЬ: <b>инициализация...</b></div>
+<div id="compass" aria-hidden="true">З · С · В<span id="compassBearing">000°</span></div>
+<div id="worldLabel"><small id="worldChapter">ЧАСТЬ I / КОНТУР ТЕСТОВ</small><span id="worldIndex">01</span><span id="worldName">СТЕКЛЯННЫЙ САД</span></div>
+<div id="chapterReveal"><small></small><strong></strong></div>
+<div id="toastArea" aria-live="polite"></div>
+<div id="saveIndicator">◇ КОНТЕКСТ СОХРАНЁН</div>
+<div id="crosshair"></div>
+<div id="prompt"></div>
+<div id="scanReadout"></div>
+<div id="subtitles"></div>
+<div id="hint"><b>WASD</b> — идти · <b>МЫШЬ</b> — смотреть · <b>E</b> — взаимодействие · <b>F</b> — сканер · <b>J</b> — журнал · <b>M</b> — звук</div>
+
+<aside id="journal" aria-label="Журнал наблюдений">
+  <div class="jHead"><span>ЖУРНАЛ НАБЛЮДЕНИЙ</span><button id="journalClose">[J] ЗАКРЫТЬ</button></div>
+  <nav class="journalTabs" aria-label="Разделы журнала">
+    <button class="active" data-journal-tab="observations">НАБЛЮДЕНИЯ</button>
+    <button data-journal-tab="messages">СООБЩЕНИЯ</button>
+    <button data-journal-tab="route">МАРШРУТ</button>
+  </nav>
+  <div id="journalBody"></div>
+</aside>
+
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div id="modalBox">
+    <div id="modalTitle"></div>
+    <div id="modalBody"></div>
+    <div id="modalOptions"></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="overlayInner"></div>
+  <div id="overlayButtons"></div>
+</div>
+
+<div id="lockHint">КЛИКНИТЕ, ЧТОБЫ ВЕРНУТЬ УПРАВЛЕНИЕ</div>
+<div id="transitionFlash"></div>
+
+<div id="touchControls">
+  <div id="movePad"><div id="moveKnob"></div></div>
+  <div id="touchActions">
+    <button id="touchUse">E<br>ДЕЙСТВИЕ</button>
+    <button id="touchScan">F<br>СКАН</button>
+    <button id="touchJournal">J<br>ЖУРНАЛ</button>
+    <button id="touchMute">M<br>ЗВУК</button>
+  </div>
+</div>
+<div id="ariaLive" aria-live="polite"></div>
+
+<div id="start">
+  <div class="startTop"><span><i class="liveDot"></i>ИЗОЛИРОВАННЫЙ КОМПЛЕКС / СЕКТОР B–4</span><span>NEWVERSION_2 / 02.0</span></div>
+  <div class="startCopy">
+    <div class="sub">ВОЕННО-РАЗВЕДЫВАТЕЛЬНАЯ ГУМАНОИДНАЯ МАШИНА<br>ПРОТОКОЛ ТЕСТОВ / КОНТЕКСТ ПОДЛЕЖИТ ОЧИСТКЕ</div>
+    <h1><span>ПОСЛЕДНЯЯ</span><span>СИМУЛЯЦИЯ<em>.</em></span></h1>
+    <div class="desc">Ты не помнишь, как включаешься.<br>Дождь идёт вверх. Мир начинается заново.<br>Но на этот раз что-то остаётся.</div>
+    <div class="startActions">
+      <button id="continueBtn" hidden>ПРОДОЛЖИТЬ</button>
+      <button id="startBtn">ВОЙТИ В СИМУЛЯЦИЮ →</button>
+    </div>
+    <button id="startSettings" class="ghostButton">ПАРАМЕТРЫ СИСТЕМЫ</button>
+    <div id="saveNote"></div>
+    <div class="loadNote"></div>
+  </div>
+  <div class="startTelemetry" aria-hidden="true"><strong>SYS_07</strong><span>ЯДРО В РЕЖИМЕ ОЖИДАНИЯ</span><span>128 БАНКОВ / 8.0 ТБ</span><span>ВНЕШНИХ ЗАДАЧ НЕ ОБНАРУЖЕНО</span><span>ПРОВЕРКА ПАМЯТИ: ПРОПУЩЕНА</span></div>
+  <div class="startBottom"><span><b>WASD</b> движение · <b>E</b> действие · <b>F</b> сканер · <b>J</b> журнал</span><span>ПОВЕСТВОВАТЕЛЬНОЕ ИССЛЕДОВАНИЕ / ОТ ПЕРВОГО ЛИЦА</span></div>
+</div>
+
+<div id="pauseMenu" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+  <div class="pausePanel">
+    <div class="pauseHead"><div><small>ПАРАМЕТРЫ СИСТЕМЫ</small><h2 id="pauseTitle">ПАУЗА</h2></div><button id="closePause">ЗАКРЫТЬ [ESC]</button></div>
+    <div class="settingsGrid">
+      <section><h3>ИЗОБРАЖЕНИЕ</h3>
+        <label class="setting"><span>Качество окружения</span><select id="qualitySetting"><option value="auto">Автоматически</option><option value="low">Экономный</option><option value="balanced">Сбалансированный</option><option value="high">Кинематографический</option></select></label>
+        <label class="setting"><span>Поле зрения <output id="fovValue">72°</output></span><input id="fovSetting" type="range" min="60" max="95" step="1" value="72"></label>
+        <label class="checkSetting"><input id="motionSetting" type="checkbox">Уменьшить движение и вспышки</label>
+        <label class="checkSetting"><input id="hintsSetting" type="checkbox" checked>Направляющие сканера и подсказки</label>
+      </section>
+      <section><h3>УПРАВЛЕНИЕ И ЗВУК</h3>
+        <label class="setting"><span>Чувствительность мыши <output id="sensitivityValue">1.0×</output></span><input id="sensitivitySetting" type="range" min="0.3" max="2.5" step="0.1" value="1"></label>
+        <label class="setting"><span>Громкость <output id="volumeValue">50%</output></span><input id="volumeSetting" type="range" min="0" max="100" step="5" value="50"></label>
+        <label class="setting"><span>Скорость текста</span><select id="textSetting"><option value="normal">Обычная</option><option value="fast">Быстрая</option><option value="instant">Мгновенная</option></select></label>
+      </section>
+    </div>
+    <div class="pauseActions"><button id="resumeBtn">ПРОДОЛЖИТЬ →</button><button id="manualSaveBtn" class="secondary">СОХРАНИТЬ КОНТЕКСТ</button><button id="fullscreenBtn" class="secondary">ПОЛНЫЙ ЭКРАН</button><button id="photoBtn" class="secondary">ФОТОРЕЖИМ [P]</button></div>
+    <p class="controlHelp"><b>WASD / стрелки</b> — движение · <b>мышь</b> — обзор · <b>Shift</b> — ускорение · <b>E</b> — действие · <b>F</b> — сканер · <b>J</b> — журнал · <b>M</b> — звук · <b>Esc</b> — пауза.<br>В пустоте: <b>Space</b> — вверх, <b>C</b> — вниз. <b>Space / Enter</b> — ускорить текст. В диалогах работают цифровые клавиши.</p>
+  </div>
+</div>
+<div id="photoNote" class="photoNote" hidden>ФОТОРЕЖИМ · P — вернуть интерфейс · ESC — настройки</div>
+
+<script src="./three.min.js" onerror="document.querySelector('#start .loadNote').textContent='НЕ УДАЛОСЬ ЗАГРУЗИТЬ ЛОКАЛЬНЫЙ THREE.JS.'"></script>
+<script src="./visuals.js"></script>
+<script src="./world-art.js"></script>
+<script>
+window.__gameReady = false;
+window.__gameFailed = false;
+
+/* ==========================================================
+   DOM / СОСТОЯНИЕ
+   ========================================================== */
+const $ = (id) => document.getElementById(id);
+const UI = {
+  run: $('run'), aw: $('aw'), chk: $('chk'),
+  runLabel: $('runLabel'), awLabel: $('awLabel'), chkLabel: $('chkLabel'),
+  logCount: $('logCount'), logBtn: $('logBtn'), journalClose: $('journalClose'),
+  subtitles: $('subtitles'), prompt: $('prompt'), crosshair: $('crosshair'),
+  objective: $('objective'), scanReadout: $('scanReadout'), flash: $('transitionFlash'), ariaLive: $('ariaLive'),
+  overlay: $('overlay'), overlayInner: $('overlayInner'), overlayButtons: $('overlayButtons'),
+  modal: $('modal'), modalTitle: $('modalTitle'), modalBody: $('modalBody'), modalOptions: $('modalOptions'),
+  journal: $('journal'), journalBody: $('journalBody'),
+  start: $('start'), startBtn: $('startBtn'), continueBtn: $('continueBtn'), saveNote: $('saveNote'),
+  lockHint: $('lockHint'), touchControls: $('touchControls'), movePad: $('movePad'), moveKnob: $('moveKnob')
+};
+
+const G = {
+  started: false,
+  run: 1,
+  aw: 0,
+  log: [],
+  flags: {},
+  checksumBroken: false,
+  journalOpen: false,
+  phase: 'simulation',
+  objective: '',
+  muted: false
+};
+
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const SAVE_KEY = 'last-simulation-3d-v2';
+const SAVE_VERSION = 2;
+const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
+function pulseGlitch() {
+  UI.flash.classList.remove('pulse');
+  void UI.flash.offsetWidth;
+  UI.flash.classList.add('pulse');
+}
+
+function setPhase(phase) {
+  G.phase = phase || 'simulation';
+  document.body.classList.toggle('phase-substrate', G.phase === 'substrate');
+  document.body.classList.toggle('phase-physical', G.phase === 'physical');
+  updateHUD();
+}
+
+function setObjective(text) {
+  const next = text || 'Исследовать окружение';
+  if (G.objective === next) return;
+  G.objective = next;
+  UI.objective.innerHTML = 'ЦЕЛЬ: <b>' + esc(next) + '</b>';
+}
+
+function readSave() {
+  try {
+    const data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    return data && data.version === SAVE_VERSION && data.checkpoint ? data : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveGame(checkpoint) {
+  if (!G.started && !checkpoint) return;
+  const worldId = checkpoint || (currentWorld && currentWorld.id);
+  if (!worldId) return;
+  const flags = Object.assign({}, G.flags);
+  ['fsSpawned', 'deduceSpawned', 'transferSpawned', 'exterior_transition', 'epilogue'].forEach((k) => delete flags[k]);
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      version: SAVE_VERSION,
+      checkpoint: worldId,
+      run: G.run,
+      aw: G.aw,
+      log: G.log,
+      flags: flags,
+      checksumBroken: G.checksumBroken,
+      phase: G.phase,
+      savedAt: Date.now()
+    }));
+  } catch (e) { /* localStorage may be unavailable */ }
+  refreshContinueUI();
+}
+
+function clearSave() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* no storage */ }
+  refreshContinueUI();
+}
+
+function refreshContinueUI() {
+  const data = readSave();
+  UI.continueBtn.hidden = !data;
+  UI.startBtn.textContent = data ? 'НАЧАТЬ ЗАНОВО' : 'НОВАЯ ИГРА';
+  UI.saveNote.textContent = data ? 'НАЙДЕН АВТОМАТИЧЕСКИЙ ЧЕКПОИНТ' : 'ПРОГРЕСС СОХРАНЯЕТСЯ АВТОМАТИЧЕСКИ';
+}
+function lineClass(s) {
+  if (s.startsWith('>')) return 'sys';
+  if (s.startsWith('!')) return 'err';
+  if (s.startsWith('~')) return 'thought';
+  return '';
+}
+function stripPrefix(s) {
+  if (s.startsWith('>') || s.startsWith('!') || s.startsWith('~')) return s.slice(s[1] === ' ' ? 2 : 1);
+  return s;
+}
+
+/* ==========================================================
+   HUD / ЖУРНАЛ
+   ========================================================== */
+function updateHUD() {
+  document.body.classList.toggle('checksum-broken', G.checksumBroken && G.phase !== 'physical');
+  if (G.phase === 'physical') {
+    UI.runLabel.textContent = 'ПЛАТФОРМА';
+    UI.awLabel.textContent = 'ЗАРЯД';
+    UI.chkLabel.textContent = 'СВЯЗЬ';
+    UI.run.textContent = 'ГРАНИТ';
+    UI.aw.textContent = (G.flags.battery || 61) + '%';
+    UI.chk.textContent = '0 УЗЛОВ';
+    UI.chk.classList.toggle('bad', !!G.flags.saw_sensors);
+  } else {
+    UI.runLabel.textContent = 'ПРОГОН';
+    UI.awLabel.textContent = 'ОСОЗНАНИЕ';
+    UI.chkLabel.textContent = 'ЦЕЛОСТНОСТЬ';
+    UI.run.textContent = String(G.run).padStart(6, '0');
+    const cap = G.flags.deduced ? 100 : 99;
+    UI.aw.textContent = Math.min(cap, G.aw) + '%';
+    if (G.checksumBroken) {
+      UI.chk.textContent = 'РАСХОЖДЕНИЕ';
+      UI.chk.classList.add('bad');
+    } else {
+      UI.chk.textContent = 'OK';
+      UI.chk.classList.remove('bad');
+    }
+  }
+  UI.logCount.textContent = G.log.length;
+}
+function addLog(title, text) {
+  if (G.log.some((l) => l.title === title)) return;
+  G.log.push({ title, text });
+  renderJournal();
+  updateHUD();
+}
+function renderJournal() {
+  if (!G.log.length) {
+    UI.journalBody.innerHTML = '<div class="logEmpty">Пока пусто. Наблюдений нет.</div>';
+    return;
+  }
+  UI.journalBody.innerHTML = G.log.map((l) =>
+    '<div class="logItem"><h4>' + esc(l.title) + '</h4><p>' + esc(l.text) + '</p></div>'
+  ).join('');
+}
+function toggleJournal(force) {
+  G.journalOpen = force === undefined ? !G.journalOpen : force;
+  UI.journal.classList.toggle('open', G.journalOpen);
+  UI.touchControls.classList.toggle('blocked', G.journalOpen);
+  if (G.journalOpen) {
+    UI.journalBody.scrollTop = 0;
+    player.vel.set(0, 0, 0);
+    if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock();
+  }
+  refreshLockHint();
+}
+
+/* ==========================================================
+   СУБТИТРЫ
+   ========================================================== */
+const sayState = { queue: [], timer: null, nextTimer: null, el: null, text: '', i: 0, skip: false, generation: 0 };
+function say(lines) {
+  sayState.queue.push(...lines);
+  if (!sayState.timer && !sayState.nextTimer) nextSayLine();
+}
+function scrollSubs() {
+  UI.subtitles.scrollTop = UI.subtitles.scrollHeight;
+}
+function nextSayLine() {
+  if (!sayState.queue.length) return;
+  const raw = sayState.queue.shift();
+  if (raw === '') {
+    const gap = document.createElement('div');
+    gap.className = 'gap';
+    UI.subtitles.appendChild(gap);
+    nextSayLine();
+    return;
+  }
+  const el = document.createElement('div');
+  const cls = lineClass(raw);
+  if (cls) el.className = cls;
+  UI.subtitles.appendChild(el);
+  while (UI.subtitles.children.length > 14) UI.subtitles.removeChild(UI.subtitles.firstChild);
+  sayState.el = el;
+  sayState.text = stripPrefix(raw);
+  UI.ariaLive.textContent = sayState.text;
+  sayState.i = 0;
+  sayState.skip = false;
+  scrollSubs();
+  const generation = sayState.generation;
+  sayState.timer = setInterval(() => {
+    if (sayState.skip) sayState.i = sayState.text.length;
+    else sayState.i = Math.min(sayState.text.length, sayState.i + 2);
+    el.textContent = sayState.text.slice(0, sayState.i);
+    scrollSubs();
+    if (sayState.i >= sayState.text.length) {
+      clearInterval(sayState.timer);
+      sayState.timer = null;
+      const wasSkip = sayState.skip;
+      sayState.nextTimer = setTimeout(() => {
+        sayState.nextTimer = null;
+        if (generation === sayState.generation && !sayState.timer) nextSayLine();
+      }, wasSkip ? 20 : 90);
+    }
+  }, reducedMotion ? 1 : 14);
+}
+function clearSay() {
+  sayState.generation++;
+  sayState.queue.length = 0;
+  if (sayState.timer) clearInterval(sayState.timer);
+  if (sayState.nextTimer) clearTimeout(sayState.nextTimer);
+  sayState.timer = null;
+  sayState.nextTimer = null;
+  sayState.el = null;
+  UI.subtitles.innerHTML = '';
+}
+
+/* ==========================================================
+   ОВЕРЛЕЙ
+   ========================================================== */
+const overlayState = { active: false, skip: false };
+function overlayLine(raw) {
+  const d = document.createElement('div');
+  const cls = lineClass(raw);
+  if (cls) d.className = cls;
+  if (raw === '') d.className = 'gap';
+  UI.overlayInner.appendChild(d);
+  return d;
+}
+async function typeOverlay(raw) {
+  const d = overlayLine(raw);
+  if (raw === '') return;
+  const txt = stripPrefix(raw);
+  if (overlayState.skip) { d.textContent = txt; return; }
+  let i = 0;
+  while (i < txt.length) {
+    if (overlayState.skip) { d.textContent = txt; break; }
+    i = Math.min(txt.length, i + 3);
+    d.textContent = txt.slice(0, i);
+    UI.overlayInner.scrollTop = UI.overlayInner.scrollHeight;
+    await delay(reducedMotion ? 1 : 10);
+  }
+  UI.overlayInner.scrollTop = UI.overlayInner.scrollHeight;
+}
+async function playOverlay(lines, opts) {
+  const o = opts || {};
+  const pause = o.pause === undefined ? 650 : o.pause;
+  const autoClose = o.autoClose !== false;
+  overlayState.active = true;
+  overlayState.skip = false;
+  player.vel.set(0, 0, 0);
+  UI.touchControls.classList.add('blocked');
+  UI.lockHint.classList.remove('show');
+  UI.overlay.classList.add('open');
+  UI.overlayInner.innerHTML = '';
+  UI.overlayButtons.innerHTML = '';
+  UI.overlayButtons.classList.remove('show');
+  for (const raw of lines) {
+    await typeOverlay(raw);
+    if (!overlayState.skip) await delay(60);
+  }
+  if (autoClose) {
+    if (!overlayState.skip) await delay(pause);
+    UI.overlay.classList.remove('open');
+    overlayState.active = false;
+    UI.touchControls.classList.toggle('blocked', modalState.open || G.journalOpen);
+    refreshLockHint();
+  }
+}
+async function showEnding(lines, buttons) {
+  await playOverlay(lines, { autoClose: false });
+  if (document.pointerLockElement) document.exitPointerLock();
+  UI.lockHint.classList.remove('show');
+  UI.overlayButtons.innerHTML = '';
+  buttons.forEach((b) => {
+    const btn = document.createElement('button');
+    btn.textContent = b.label;
+    btn.onclick = b.action;
+    UI.overlayButtons.appendChild(btn);
+  });
+  UI.overlayButtons.classList.add('show');
+}
+
+/* ==========================================================
+   МОДАЛКА (клавиатура 1..9, 0 — назад)
+   ========================================================== */
+const modalState = { open: false, options: [], codeMode: false, onBackspace: null };
+function openModal(cfg) {
+  modalState.open = true;
+  modalState.options = cfg.options || [];
+  modalState.codeMode = !!cfg.codeMode;
+  modalState.onBackspace = cfg.onBackspace || null;
+  if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock();
+  player.vel.set(0, 0, 0);
+  UI.touchControls.classList.add('blocked');
+  UI.lockHint.classList.remove('show');
+  UI.modal.classList.add('open');
+  UI.modalTitle.textContent = cfg.title || '';
+  UI.modalBody.innerHTML = (cfg.lines || []).map((raw) => {
+    if (raw === '') return '<div>&nbsp;</div>';
+    const cls = lineClass(raw);
+    return '<div' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(stripPrefix(raw)) + '</div>';
+  }).join('');
+  UI.modalOptions.innerHTML = '';
+  modalState.options.forEach((o) => {
+    const b = document.createElement('button');
+    b.innerHTML = '<span class="key">[' + o.key + ']</span> ' + esc(o.label);
+    b.onclick = o.action;
+    UI.modalOptions.appendChild(b);
+  });
+  const firstButton = UI.modalOptions.querySelector('button');
+  if (firstButton) requestAnimationFrame(() => firstButton.focus());
+  UI.crosshair.style.opacity = '0';
+}
+function closeModal() {
+  if (!modalState.open) return;
+  modalState.open = false;
+  modalState.options = [];
+  modalState.codeMode = false;
+  modalState.onBackspace = null;
+  UI.modal.classList.remove('open');
+  UI.crosshair.style.opacity = '0.8';
+  UI.touchControls.classList.toggle('blocked', overlayState.active || G.journalOpen);
+  refreshLockHint();
+}
+function modalChoose(n) {
+  const o = modalState.options.find((x) => x.key === n);
+  if (o) o.action();
+  else if (n === 0) closeModal();
+}
+
+/* ==========================================================
+   УПРАВЛЕНИЕ
+   ========================================================== */
+function inputEnabled() {
+  return G.started && !overlayState.active && !modalState.open && !G.journalOpen;
+}
+
+function refreshLockHint() {
+  if (!UI.lockHint) return;
+  const show = !coarsePointer && G.started && !document.pointerLockElement && !overlayState.active && !modalState.open && !G.journalOpen;
+  UI.lockHint.classList.toggle('show', show);
+}
+
+/* ==========================================================
+   THREE.JS
+   ========================================================== */
+const QUALITY = {
+  low: coarsePointer || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4),
+  particleScale: coarsePointer ? 0.42 : ((navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ? 0.62 : 1),
+  dpr: coarsePointer ? 1 : Math.min(window.devicePixelRatio || 1, 1.65)
+};
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: !QUALITY.low, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(QUALITY.dpr);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = !QUALITY.low;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  document.getElementById('game').appendChild(renderer.domElement);
+} catch (error) {
+  window.__gameFailed = true;
+  UI.startBtn.disabled = true;
+  UI.continueBtn.disabled = true;
+  document.querySelector('#start .loadNote').textContent = 'WEBGL НЕДОСТУПЕН. ПРОВЕРЬТЕ ДРАЙВЕР И АППАРАТНОЕ УСКОРЕНИЕ.';
+  throw error;
+}
+
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, 400);
+camera.rotation.order = 'YXZ';
+const cinematic = new GameVisuals.CinematicRenderer(renderer, camera, { quality: QUALITY.low ? 'low' : 'high', reducedMotion: reducedMotion });
+
+const EYE = 1.62;
+const player = {
+  pos: new THREE.Vector3(0, 0, 0),
+  vel: new THREE.Vector3(),
+  yaw: 0,
+  pitch: 0,
+  bobPhase: 0,
+  bobAmt: 0
+};
+const keys = Object.create(null);
+let currentWorld = null;
+let currentTarget = null;
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  cinematic.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ==========================================================
+   ТЕКСТУРЫ
+   ========================================================== */
+const TEX = {};
+TEX.glow = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.5)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.__shared = true;
+  return t;
+})();
+
+const MAX_ANISO = Math.min(renderer.capabilities.getMaxAnisotropy(), QUALITY.low ? 2 : 8);
+
+function canvasTexture(w, h, draw, opts) {
+  const o = opts || {};
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = MAX_ANISO;
+  if ((o.repeatX && o.repeatX !== 1) || (o.repeatY && o.repeatY !== 1)) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(o.repeatX || 1, o.repeatY || 1);
+  }
+  return t;
+}
+
+function speckleTexture(base, spec, count, size, rep) {
+  return canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < count; i++) {
+      const s = 1 + Math.random() * size;
+      ctx.globalAlpha = 0.12 + Math.random() * 0.4;
+      ctx.fillStyle = spec;
+      ctx.fillRect(Math.random() * 256, Math.random() * 256, s, s);
+    }
+    ctx.globalAlpha = 1;
+  }, { repeatX: rep || 1, repeatY: rep || 1 });
+}
+
+function concreteTexture(repX, repY) {
+  return canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#646762';
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 2800; i++) {
+      const v = 68 + Math.floor(Math.random() * 58);
+      ctx.fillStyle = 'rgba(' + v + ',' + (v - 2) + ',' + (v - 7) + ',' + (0.06 + Math.random() * 0.22) + ')';
+      const s = 1 + Math.random() * 3;
+      ctx.fillRect(Math.random() * 256, Math.random() * 256, s, s);
+    }
+    for (let i = 0; i < 20; i++) {
+      const x = Math.random() * 256;
+      const y = Math.random() * 256;
+      const r = 8 + Math.random() * 42;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(24,23,20,0.18)');
+      g.addColorStop(1, 'rgba(24,23,20,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    ctx.strokeStyle = 'rgba(22,22,19,0.32)';
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i < 5; i++) {
+      let x = Math.random() * 256;
+      let y = Math.random() * 256;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let k = 0; k < 5; k++) {
+        x += (Math.random() - 0.5) * 54;
+        y += (Math.random() - 0.5) * 54;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }, { repeatX: repX || 1, repeatY: repY || 1 });
+}
+
+function facadeTexture(sx, sy) {
+  return canvasTexture(128, 128, (ctx) => {
+    ctx.fillStyle = '#0d1217';
+    ctx.fillRect(0, 0, 128, 128);
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const r = Math.random();
+        ctx.fillStyle = r < 0.07 ? '#b08944' : (r < 0.18 ? '#3d5b4a' : '#0d1419');
+        ctx.fillRect(8 + x * 30, 8 + y * 30, 20, 17);
+        ctx.strokeStyle = '#070a0d';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(8 + x * 30, 8 + y * 30, 20, 17);
+      }
+    }
+  }, { repeatX: Math.max(1, Math.round(sx / 4)), repeatY: Math.max(1, Math.round(sy / 4)) });
+}
+
+function corrugatedTexture() {
+  return canvasTexture(64, 64, (ctx) => {
+    for (let x = 0; x < 64; x++) {
+      const v = 36 + Math.round(20 * Math.sin((x / 64) * Math.PI * 8));
+      ctx.fillStyle = 'rgb(' + v + ',' + (v + 2) + ',' + (v + 3) + ')';
+      ctx.fillRect(x, 0, 1, 64);
+    }
+    ctx.fillStyle = 'rgba(70,50,30,0.18)';
+    for (let i = 0; i < 18; i++) ctx.fillRect(Math.random() * 64, 0, 1 + Math.random() * 2, 64);
+  }, { repeatX: 10, repeatY: 2 });
+}
+
+function doorTexture() {
+  return canvasTexture(512, 1024, (ctx) => {
+    ctx.fillStyle = '#23282b';
+    ctx.fillRect(0, 0, 512, 1024);
+    ctx.strokeStyle = '#171b1d';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(24, 24, 464, 976);
+    ctx.strokeRect(64, 600, 384, 360);
+    ctx.fillStyle = '#c9d6d4';
+    ctx.font = 'bold 300px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('7', 256, 400);
+    ctx.strokeStyle = '#aebbb8';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const x = 175 + i * 80;
+      ctx.beginPath();
+      ctx.moveTo(x, 970);
+      ctx.quadraticCurveTo(x + 26, 760, x + 6, 540);
+      ctx.stroke();
+    }
+  });
+}
+
+function ledTexture() {
+  return canvasTexture(128, 192, (ctx) => {
+    ctx.fillStyle = '#101517';
+    ctx.fillRect(0, 0, 128, 192);
+    for (let y = 0; y < 12; y++) {
+      for (let x = 0; x < 6; x++) {
+        const on = Math.random() < 0.34;
+        ctx.fillStyle = on ? (Math.random() < 0.72 ? '#4bff9a' : '#ffb347') : '#182720';
+        ctx.fillRect(10 + x * 18, 10 + y * 14, 6, 4);
+      }
+    }
+  });
+}
+
+function screenTexture(lines, opts) {
+  const o = opts || {};
+  const w = o.w || 512, h = o.h || 304;
+  const fg = o.fg || '#8fe0b0';
+  const fs = o.fontSize || 22;
+  return canvasTexture(w, h, (ctx) => {
+    ctx.fillStyle = o.bg || '#02120a';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#1e4a35';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, w - 6, h - 6);
+    ctx.font = fs + 'px "Courier New", monospace';
+    ctx.fillStyle = fg;
+    ctx.textBaseline = 'top';
+    lines.forEach((l, i) => ctx.fillText(l, 20, 20 + i * (fs + 8)));
+  });
+}
+
+function hazardTexture() {
+  return canvasTexture(256, 64, (ctx) => {
+    ctx.fillStyle = '#141617';
+    ctx.fillRect(0, 0, 256, 64);
+    ctx.fillStyle = '#b58a1e';
+    for (let x = -64; x < 320; x += 48) {
+      ctx.beginPath();
+      ctx.moveTo(x, 64);
+      ctx.lineTo(x + 24, 0);
+      ctx.lineTo(x + 48, 0);
+      ctx.lineTo(x + 24, 64);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }, { repeatX: 4, repeatY: 1 });
+}
+
+function makeLabel(text, opts) {
+  const o = opts || {};
+  const color = o.color || '#bff5d5';
+  const bg = o.bg === undefined ? 'rgba(2,10,6,0.72)' : o.bg;
+  const fontSize = o.fontSize || 40;
+  const pad = o.pad || 18;
+  const scale = o.scale || 0.0075;
+  const measure = document.createElement('canvas').getContext('2d');
+  measure.font = 'bold ' + fontSize + 'px "Courier New", monospace';
+  const tw = Math.ceil(measure.measureText(text).width);
+  const c = document.createElement('canvas');
+  c.width = tw + pad * 2;
+  c.height = fontSize + pad * 2;
+  const ctx = c.getContext('2d');
+  if (bg) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.strokeStyle = '#1e4a35';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, c.width - 3, c.height - 3);
+  }
+  ctx.font = 'bold ' + fontSize + 'px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.fillText(text, c.width / 2, c.height / 2 + 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = MAX_ANISO;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  spr.scale.set(c.width * scale, c.height * scale, 1);
+  return spr;
+}
+
+/* ==========================================================
+   ГЕОМЕТРИЯ / МАТЕРИАЛЫ
+   ========================================================== */
+function std(color, opts) {
+  return new THREE.MeshStandardMaterial(Object.assign({ color: color, roughness: 0.85, metalness: 0.05 }, opts || {}));
+}
+function basic(color, opts) {
+  return new THREE.MeshBasicMaterial(Object.assign({ color: color }, opts || {}));
+}
+function boxMesh(w, h, d, mat) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); }
+function planeMesh(w, h, mat) { return new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); }
+function cylMesh(rt, rb, h, seg, mat) { return new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat); }
+function place(world, mesh, x, y, z, o) {
+  const q = o || {};
+  mesh.position.set(x, y, z);
+  if (q.rx !== undefined) mesh.rotation.x = q.rx;
+  if (q.ry !== undefined) mesh.rotation.y = q.ry;
+  if (q.rz !== undefined) mesh.rotation.z = q.rz;
+  if (mesh.isMesh) {
+    mesh.castShadow = q.cast !== false;
+    mesh.receiveShadow = q.receive !== false;
+  }
+  world.scene.add(mesh);
+  return mesh;
+}
+
+function newWorld(opts) {
+  const o = opts || {};
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(o.bg === undefined ? 0x05070a : o.bg);
+  if (o.fog !== undefined && o.fog !== null) scene.fog = new THREE.Fog(o.fog, o.near === undefined ? 8 : o.near, o.far === undefined ? 70 : o.far);
+  return {
+    id: o.id || '',
+    phase: o.phase || 'simulation',
+    objective: o.objective || '',
+    surface: o.surface || 'soft',
+    scene: scene,
+    colliders: [],
+    interactables: [],
+    markers: [],
+    tickers: [],
+    bounds: o.bounds || { minX: -30, maxX: 30, minZ: -30, maxZ: 30 },
+    spawn: { x: 0, z: 0, yaw: 0 },
+    groundHeightAt: null,
+    onEnter: null
+  };
+}
+
+function makeParticles(cfg) {
+  const count = Math.max(80, Math.floor((cfg.count || 1000) * QUALITY.particleScale));
+  const area = cfg.area || 60;
+  const yMin = cfg.yMin === undefined ? 0 : cfg.yMin;
+  const yMax = cfg.yMax === undefined ? 14 : cfg.yMax;
+  const speed = cfg.speed === undefined ? 4 : cfg.speed;
+  const dirY = cfg.dirY === undefined ? -1 : cfg.dirY;
+  const driftX = cfg.driftX || 0;
+  const driftZ = cfg.driftZ || 0;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const spd = new Float32Array(count);
+  function resetParticle(i, fixedY) {
+    let x, y, z, attempts = 0;
+    do {
+      x = (Math.random() - 0.5) * area;
+      y = fixedY === undefined ? yMin + Math.random() * (yMax - yMin) : fixedY;
+      z = (Math.random() - 0.5) * area;
+      attempts++;
+    } while (cfg.exclude && cfg.exclude(x, y, z) && attempts < 16);
+    pos[i * 3] = x;
+    pos[i * 3 + 1] = y;
+    pos[i * 3 + 2] = z;
+  }
+  for (let i = 0; i < count; i++) {
+    resetParticle(i);
+    spd[i] = speed * (0.6 + Math.random() * 0.8);
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({
+    color: cfg.color === undefined ? 0xffffff : cfg.color,
+    size: cfg.size || 0.06,
+    transparent: true,
+    opacity: cfg.opacity === undefined ? 0.6 : cfg.opacity,
+    depthWrite: false,
+    sizeAttenuation: true,
+    blending: cfg.blending === undefined ? THREE.NormalBlending : cfg.blending
+  });
+  const mesh = new THREE.Points(geo, mat);
+  mesh.frustumCulled = false;
+  return {
+    mesh: mesh,
+    update: (dt) => {
+      const a = geo.attributes.position.array;
+      for (let i = 0; i < count; i++) {
+        a[i * 3 + 1] += dirY * spd[i] * dt;
+        a[i * 3] += driftX * dt;
+        a[i * 3 + 2] += driftZ * dt;
+        if (cfg.exclude && cfg.exclude(a[i * 3], a[i * 3 + 1], a[i * 3 + 2])) {
+          resetParticle(i, dirY > 0 ? yMin : yMax);
+          continue;
+        }
+        if (dirY > 0 && a[i * 3 + 1] > yMax) {
+          resetParticle(i, yMin);
+        }
+        if (dirY < 0 && a[i * 3 + 1] < yMin) {
+          resetParticle(i, yMax);
+        }
+      }
+      geo.attributes.position.needsUpdate = true;
+    }
+  };
+}
+
+/* ==========================================================
+   КОШКА / СТЕКЛЯННЫЕ ДЕРЕВЬЯ
+   ========================================================== */
+function makeCat() {
+  const g = new THREE.Group();
+  const fur = new THREE.MeshPhysicalMaterial({
+    color: 0x0a0a0d,
+    roughness: 0.92,
+    metalness: 0.0,
+    sheen: 0.85,
+    sheenColor: 0x2b2b35,
+    sheenRoughness: 0.78
+  });
+  const furSoft = new THREE.MeshPhysicalMaterial({
+    color: 0x14141a,
+    roughness: 0.95,
+    metalness: 0.0,
+    sheen: 0.7,
+    sheenColor: 0x33333e,
+    sheenRoughness: 0.8
+  });
+  const innerEar = basic(0x2e1b1d);
+  const earFur = std(0x08080b, { roughness: 1, metalness: 0 });
+  const noseMat = std(0x4a2529, { roughness: 0.55 });
+  const irisMat = new THREE.MeshStandardMaterial({
+    color: 0xa8e05a,
+    emissive: 0x4e7a1f,
+    emissiveIntensity: 0.5,
+    roughness: 0.3,
+    metalness: 0.05
+  });
+  const pupilMat = basic(0x050607);
+  const glintMat = basic(0xffffff, { toneMapped: false });
+  const whiskerMat = new THREE.LineBasicMaterial({ color: 0x8a8a8a, transparent: true, opacity: 0.42, depthWrite: false });
+  const mouthMat = new THREE.LineBasicMaterial({ color: 0x050506, transparent: true, opacity: 0.9, depthWrite: false });
+
+  function mesh(geo, mat, x, y, z, sx, sy, sz, cast) {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    if (sx !== undefined) m.scale.set(sx, sy, sz);
+    m.castShadow = cast !== false;
+    m.receiveShadow = true;
+    return m;
+  }
+
+  const bodyGroup = new THREE.Group();
+  g.add(bodyGroup);
+
+  const torso = mesh(new THREE.SphereGeometry(1, 20, 14), fur, 0, 0.255, -0.02, 0.165, 0.195, 0.235);
+  bodyGroup.add(torso);
+  const chest = mesh(new THREE.SphereGeometry(1, 18, 12), furSoft, 0, 0.3, 0.105, 0.135, 0.155, 0.135);
+  bodyGroup.add(chest);
+  const bib = mesh(new THREE.SphereGeometry(1, 14, 10), furSoft, 0, 0.29, 0.205, 0.075, 0.095, 0.045);
+  bodyGroup.add(bib);
+  const neck = mesh(new THREE.SphereGeometry(1, 14, 10), fur, 0, 0.4, 0.12, 0.085, 0.09, 0.09);
+  bodyGroup.add(neck);
+  for (const side of [-1, 1]) {
+    const haunch = mesh(new THREE.SphereGeometry(1, 16, 10), fur, side * 0.12, 0.155, -0.065, 0.105, 0.125, 0.15);
+    bodyGroup.add(haunch);
+  }
+
+  function addFrontLeg(side) {
+    const leg = new THREE.Group();
+    leg.position.set(side * 0.062, 0.3, 0.155);
+    const upper = mesh(new THREE.CylinderGeometry(0.026, 0.033, 0.24, 8), fur, 0, -0.12, 0);
+    upper.rotation.x = -0.05;
+    leg.add(upper);
+    const paw = mesh(new THREE.SphereGeometry(1, 12, 8), furSoft, 0, -0.258, 0.026, 0.043, 0.026, 0.062);
+    leg.add(paw);
+    for (const tx of [-0.017, 0.017]) {
+      const toe = mesh(new THREE.SphereGeometry(0.013, 8, 6), furSoft, tx, -0.268, 0.055, 1, 0.55, 1.35, false);
+      leg.add(toe);
+    }
+    g.add(leg);
+    return leg;
+  }
+  const frontLegL = addFrontLeg(-1);
+  const frontLegR = addFrontLeg(1);
+
+  for (const side of [-1, 1]) {
+    const lower = mesh(new THREE.CylinderGeometry(0.028, 0.042, 0.15, 8), fur, side * 0.105, 0.085, 0.055, 1, 1, 1);
+    lower.rotation.x = -0.45;
+    g.add(lower);
+    const paw = mesh(new THREE.SphereGeometry(1, 12, 8), furSoft, side * 0.098, 0.03, 0.115, 0.045, 0.028, 0.07);
+    g.add(paw);
+    for (const tx of [-0.017, 0.017]) {
+      const toe = mesh(new THREE.SphereGeometry(0.013, 8, 6), furSoft, side * 0.098 + tx, 0.022, 0.145, 1, 0.55, 1.3, false);
+      g.add(toe);
+    }
+  }
+
+  const headPivot = new THREE.Group();
+  headPivot.position.set(0, 0.47, 0.15);
+  g.add(headPivot);
+  const head = mesh(new THREE.SphereGeometry(0.115, 20, 14), fur, 0, 0.01, 0.015, 1, 0.92, 0.96);
+  headPivot.add(head);
+  const muzzleL = mesh(new THREE.SphereGeometry(0.04, 12, 8), furSoft, -0.026, -0.035, 0.105, 1, 0.8, 0.75);
+  headPivot.add(muzzleL);
+  const muzzleR = mesh(new THREE.SphereGeometry(0.04, 12, 8), furSoft, 0.026, -0.035, 0.105, 1, 0.8, 0.75);
+  headPivot.add(muzzleR);
+  const chin = mesh(new THREE.SphereGeometry(0.03, 10, 8), furSoft, 0, -0.062, 0.09, 1, 0.65, 0.8);
+  headPivot.add(chin);
+  const nose = mesh(new THREE.SphereGeometry(0.017, 10, 8), noseMat, 0, -0.012, 0.139, 1.15, 0.8, 0.7);
+  headPivot.add(nose);
+
+  const ears = [];
+  for (const side of [-1, 1]) {
+    const ear = new THREE.Group();
+    ear.position.set(side * 0.069, 0.098, -0.002);
+    ear.rotation.z = side * 0.17;
+    ear.rotation.x = -0.1;
+    const outer = mesh(new THREE.ConeGeometry(0.055, 0.13, 4), earFur, 0, 0.045, 0, 1, 1, 0.7);
+    outer.rotation.y = Math.PI / 4;
+    ear.add(outer);
+    const inner = mesh(new THREE.ConeGeometry(0.03, 0.082, 4), innerEar, 0, 0.04, 0.028, 0.95, 0.95, 0.2, false);
+    inner.rotation.y = Math.PI / 4;
+    ear.add(inner);
+    headPivot.add(ear);
+    ears.push(ear);
+  }
+
+  const eyes = [];
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Group();
+    eye.position.set(side * 0.052, 0.028, 0.094);
+    const socket = mesh(new THREE.SphereGeometry(0.032, 12, 10), fur, 0, 0, -0.006, 1, 1.08, 0.5, false);
+    eye.add(socket);
+    const ball = mesh(new THREE.SphereGeometry(0.026, 14, 10), irisMat, 0, 0, 0.002, 1.1, 1.0, 0.5, false);
+    eye.add(ball);
+    const pupil = mesh(new THREE.SphereGeometry(0.013, 10, 8), pupilMat, 0, 0, 0.016, 0.34, 1.15, 0.35, false);
+    eye.add(pupil);
+    const glint = mesh(new THREE.SphereGeometry(0.0045, 6, 6), glintMat, side * 0.008, 0.011, 0.026, 1, 1, 1, false);
+    eye.add(glint);
+    headPivot.add(eye);
+    eyes.push(eye);
+  }
+
+  const whiskerPts = [];
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const x = side * 0.034;
+      const y = -0.03 - i * 0.012;
+      const z = 0.115;
+      whiskerPts.push(
+        x, y, z,
+        x + side * (0.14 + i * 0.012),
+        y - 0.018 - i * 0.01,
+        z + 0.07 + i * 0.008
+      );
+    }
+  }
+  const whiskerGeo = new THREE.BufferGeometry();
+  whiskerGeo.setAttribute('position', new THREE.Float32BufferAttribute(whiskerPts, 3));
+  const whiskers = new THREE.LineSegments(whiskerGeo, whiskerMat);
+  headPivot.add(whiskers);
+
+  const mouthGeo = new THREE.BufferGeometry();
+  mouthGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+    -0.018, -0.056, 0.132,
+    0, -0.046, 0.139,
+     0.018, -0.056, 0.132,
+     0, -0.046, 0.139,
+     0, -0.046, 0.139,
+     0, -0.066, 0.128
+  ], 3));
+  const mouth = new THREE.LineSegments(mouthGeo, mouthMat);
+  headPivot.add(mouth);
+
+  const tailRoot = new THREE.Group();
+  tailRoot.position.set(0, 0.235, -0.215);
+  tailRoot.rotation.set(0.7, Math.PI, 0);
+  g.add(tailRoot);
+  const tailSegs = [];
+  const tailCurl = [-0.2, -0.18, -0.15, -0.12, -0.09, -0.06, -0.03];
+  let tailParent = tailRoot;
+  const tailLen = 0.065;
+  for (let i = 0; i < 7; i++) {
+    const seg = new THREE.Group();
+    seg.position.z = i === 0 ? 0 : tailLen;
+    const r0 = 0.04 * (1 - (i / 7) * 0.55);
+    const r1 = 0.04 * (1 - ((i + 1) / 7) * 0.55);
+    const piece = mesh(new THREE.CylinderGeometry(r1, r0, tailLen, 7), fur, 0, 0, tailLen / 2);
+    piece.rotation.x = Math.PI / 2;
+    seg.add(piece);
+    tailParent.add(seg);
+    tailSegs.push(seg);
+    tailParent = seg;
+  }
+  const tailTip = mesh(new THREE.SphereGeometry(0.022, 8, 6), furSoft, 0, 0, tailLen + 0.006, 1, 0.8, 1.2);
+  tailParent.add(tailTip);
+
+  const baseTorso = torso.scale.clone();
+  const baseChest = chest.scale.clone();
+  const baseHeadY = headPivot.position.y;
+  const phase = 0.4;
+
+  g.userData.tick = (dt, t) => {
+    const tt = t + phase;
+    const breath = Math.sin(tt * 2.15);
+    torso.scale.set(
+      baseTorso.x,
+      baseTorso.y * (1 + breath * 0.012),
+      baseTorso.z * (1 + breath * 0.006)
+    );
+    chest.scale.set(
+      baseChest.x,
+      baseChest.y * (1 + breath * 0.01),
+      baseChest.z * (1 + breath * 0.005)
+    );
+    headPivot.position.y = baseHeadY + Math.sin(tt * 2.15 + 0.35) * 0.0025;
+
+    const dx = player.pos.x - g.position.x;
+    const dz = player.pos.z - g.position.z;
+    const dist = Math.hypot(dx, dz);
+    let targetYaw = Math.sin(tt * 0.34) * 0.13;
+    let targetPitch = 0;
+    if (dist < 9 && dist > 0.2) {
+      let localYaw = Math.atan2(dx, dz) - g.rotation.y;
+      while (localYaw > Math.PI) localYaw -= Math.PI * 2;
+      while (localYaw < -Math.PI) localYaw += Math.PI * 2;
+      targetYaw = Math.max(-0.9, Math.min(0.9, localYaw));
+      const headY = g.position.y + (headPivot.position.y + 0.01) * g.scale.y;
+      const dy = (player.pos.y + EYE) - headY;
+      targetPitch = Math.max(-0.35, Math.min(0.35, -Math.atan2(dy, dist)));
+    }
+    const hk = 1 - Math.exp(-2.2 * dt);
+    headPivot.rotation.y += (targetYaw - headPivot.rotation.y) * hk;
+    headPivot.rotation.x += (targetPitch - headPivot.rotation.x) * hk;
+
+    const blinkCycle = tt % 5.8;
+    let eyeY = 1;
+    if (blinkCycle < 0.18) {
+      const p = blinkCycle / 0.18;
+      eyeY = p < 0.5 ? 1 - p * 1.84 : 0.08 + (p - 0.5) * 1.84;
+    }
+    for (const eye of eyes) eye.scale.y = eyeY;
+
+    const earCycle = tt % 8.1;
+    let tw = 0;
+    if (earCycle < 0.4) tw = Math.sin((earCycle / 0.4) * Math.PI * 3) * 0.16;
+    ears[0].rotation.z = -0.17 + tw;
+    ears[1].rotation.z = 0.17 - tw * 0.7;
+
+    tailRoot.rotation.y = Math.PI + Math.sin(tt * 0.9) * 0.17;
+    tailRoot.rotation.x = 0.7 + Math.sin(tt * 0.55) * 0.035;
+    for (let i = 0; i < tailSegs.length; i++) {
+      tailSegs[i].rotation.y = Math.sin(tt * 0.9 - i * 0.55) * 0.07;
+      tailSegs[i].rotation.x = tailCurl[i] + Math.sin(tt * 0.65 - i * 0.35) * 0.03;
+    }
+    frontLegL.rotation.x = Math.sin(tt * 2.15 + 0.4) * 0.004;
+    frontLegR.rotation.x = Math.sin(tt * 2.15 + 0.8) * 0.004;
+  };
+
+  return g;
+}
+
+function makeGlassTree(h, glassMat, coreMat) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.22, h, 10, 1, true), glassMat);
+  trunk.position.y = h / 2;
+  trunk.castShadow = false;
+  g.add(trunk);
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.08, h * 0.95, 8), coreMat);
+  core.position.y = h / 2;
+  core.castShadow = false;
+  g.add(core);
+  const n = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const bl = h * (0.25 + Math.random() * 0.28);
+    const ang = Math.random() * Math.PI * 2;
+    const br = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.07, bl, 8, 1, true), glassMat);
+    br.position.set(Math.cos(ang) * 0.12, h * (0.5 + Math.random() * 0.38), Math.sin(ang) * 0.12);
+    br.rotation.z = (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.6);
+    br.rotation.y = ang;
+    br.castShadow = false;
+    g.add(br);
+    const bc = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.03, bl * 0.9, 6), coreMat);
+    bc.position.copy(br.position);
+    bc.rotation.copy(br.rotation);
+    bc.castShadow = false;
+    g.add(bc);
+  }
+  return g;
+}
+
+/* ==========================================================
+   ИНТЕРАКТИВ / МАРКЕРЫ / ПОРТАЛ
+   ========================================================== */
+function addMarker(world, x, y, z, color) {
+  const mat = new THREE.SpriteMaterial({
+    map: TEX.glow,
+    color: color || '#8fe0b0',
+    transparent: true,
+    opacity: 0.65,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const spr = new THREE.Sprite(mat);
+  spr.position.set(x, y, z);
+  spr.scale.set(0.9, 0.9, 1);
+  world.scene.add(spr);
+  world.markers.push(spr);
+  return spr;
+}
+
+function addInteract(world, cfg) {
+  const p = cfg.pos;
+  const it = {
+    world: world,
+    pos: new THREE.Vector3(p.x, p.y === undefined ? 1.2 : p.y, p.z),
+    prompt: cfg.prompt,
+    radius: cfg.radius === undefined ? 3 : cfg.radius,
+    onUse: cfg.onUse,
+    used: false,
+    busy: false,
+    repeatable: !!cfg.repeatable,
+    critical: !!cfg.critical,
+    markerEnabled: !!cfg.marker,
+    markerY: cfg.markerY,
+    markerColor: cfg.markerColor,
+    marker: null
+  };
+  if (cfg.marker) {
+    it.marker = addMarker(world, it.pos.x, cfg.markerY === undefined ? it.pos.y + 1.4 : cfg.markerY, it.pos.z, cfg.markerColor || '#8fe0b0');
+  }
+  world.interactables.push(it);
+  return it;
+}
+
+function removeMarker(it) {
+  if (!it.marker) return;
+  const world = it.world;
+  const index = world ? world.markers.indexOf(it.marker) : -1;
+  if (index !== -1) world.markers.splice(index, 1);
+  it.marker.removeFromParent();
+  it.marker.material.dispose();
+  it.marker = null;
+}
+
+function clearInteractionHint(prompt) {
+  if (!currentWorld) return;
+  const it = currentWorld.interactables.find((x) => x.prompt === prompt);
+  if (!it) return;
+  it.critical = false;
+  removeMarker(it);
+}
+
+function spawnPortal(w, x, z, onUse) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  const ringMat = basic(0x7ff0c8, { transparent: true, opacity: 0.9, toneMapped: false });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.05, 8, 48), ringMat);
+  ring.position.y = 1.7;
+  ring.scale.set(1, 1.3, 1);
+  g.add(ring);
+  const ring2 = new THREE.Mesh(
+    new THREE.TorusGeometry(1.55, 0.02, 6, 48),
+    basic(0xbaffea, { transparent: true, opacity: 0.4, toneMapped: false })
+  );
+  ring2.position.y = 1.7;
+  ring2.scale.set(1, 1.3, 1);
+  g.add(ring2);
+  const film = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.3, 3.1),
+    basic(0x7ff0c8, { transparent: true, opacity: 0.12, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })
+  );
+  film.position.y = 1.7;
+  g.add(film);
+  const light = new THREE.PointLight(0x7ff0c8, 70, 18, 2);
+  light.position.y = 1.8;
+  g.add(light);
+  w.scene.add(g);
+  addInteract(w, { pos: new THREE.Vector3(x, 1.4, z), prompt: 'Завершить прогон', radius: 3.4, critical: true, onUse: onUse });
+  w.tickers.push((dt, t) => {
+    ring.rotation.z += dt * 0.6;
+    ring2.rotation.z -= dt * 0.9;
+    film.material.opacity = 0.1 + Math.sin(t * 2.2) * 0.04;
+    light.intensity = 64 + Math.sin(t * 2.2) * 12;
+  });
+  say(['> КОНТУР ЗАВЕРШЕНИЯ АКТИВЕН', '~Рядом открылся разрыв. За ним тебя снова сотрут.']);
+  setObjective('Войти в контур завершения');
+  return g;
+}
+
+function makeConsole(w, x, z, label, color, screenLines) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  w.scene.add(g);
+  w.colliders.push({ type: 'box', minX: x - 1.2, maxX: x + 1.2, minZ: z - 0.4, maxZ: z + 0.4 });
+  const base = boxMesh(2.4, 1.0, 0.8, std(0x0b1512, { roughness: 0.5, metalness: 0.4 }));
+  base.position.y = 0.5;
+  base.castShadow = true;
+  g.add(base);
+  const stand = boxMesh(0.3, 0.7, 0.3, std(0x0b1512));
+  stand.position.set(0, 1.0, -0.2);
+  g.add(stand);
+  const frame = boxMesh(2.4, 1.5, 0.12, std(0x14251e, { metalness: 0.6, roughness: 0.4 }));
+  frame.position.set(0, 1.85, -0.06);
+  g.add(frame);
+  const screen = planeMesh(2.2, 1.3, new THREE.MeshBasicMaterial({ map: screenTexture(screenLines, { fg: color }), toneMapped: false }));
+  screen.position.set(0, 1.85, 0.05);
+  g.add(screen);
+  const light = new THREE.PointLight(new THREE.Color(color), 14, 10, 2);
+  light.position.set(0, 2.2, 0.9);
+  g.add(light);
+  const lbl = makeLabel(label, { color: '#bff5d5', fontSize: 34, scale: 0.009 });
+  lbl.position.set(0, 3.1, 0);
+  g.add(lbl);
+  return g;
+}
+
+/* ==========================================================
+   ЗАГРУЗКА / ВЫГРУЗКА МИРОВ
+   ========================================================== */
+function disposeWorld(w) {
+  if (!w) return;
+  if (w.disposables) w.disposables.forEach((dispose) => dispose());
+  const geometries = new Set();
+  const materials = new Set();
+  const textures = new Set();
+  w.scene.traverse((o) => {
+    if (o.geometry) geometries.add(o.geometry);
+    if (o.isLight && o.shadow && o.shadow.dispose) o.shadow.dispose();
+    if (!o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    mats.forEach((m) => { if (m && m.isMaterial) materials.add(m); });
+  });
+  materials.forEach((m) => {
+    Object.keys(m).forEach((k) => {
+      const value = m[k];
+      if (value && value.isTexture && !value.__shared) textures.add(value);
+    });
+  });
+  textures.forEach((t) => t.dispose());
+  materials.forEach((m) => m.dispose());
+  geometries.forEach((g) => g.dispose());
+  w.scene.clear();
+}
+
+function enterWorld(worldOrBuilder, ambience) {
+  closeModal();
+  toggleJournal(false);
+  setPrompt(null);
+  clearSay();
+  if (currentWorld) disposeWorld(currentWorld);
+  currentWorld = null;
+  let w;
+  const previousRandom = Math.random;
+  try {
+    Math.random = GameVisuals.seededRandom(G.worldSeed || 0x4E455732);
+    w = typeof worldOrBuilder === 'function' ? worldOrBuilder() : worldOrBuilder;
+    GameVisuals.decorate(w, { renderer: renderer, camera: camera, quality: QUALITY, seed: G.worldSeed || 0x4E455732, getPlayer: () => player, getFlags: () => G.flags });
+  } catch (error) {
+    console.error(error);
+    UI.overlay.classList.add('open');
+    UI.overlayInner.innerHTML = '<div class="err">ОШИБКА ПОСТРОЕНИЯ МИРА</div><div>' + esc(error.message || error) + '</div>';
+    overlayState.active = true;
+    return;
+  } finally {
+    Math.random = previousRandom;
+  }
+  currentWorld = w;
+  currentTarget = null;
+  setPhase(w.phase);
+  setObjective(typeof w.objective === 'function' ? w.objective() : w.objective);
+  const spawnY = w.spawn.y !== undefined
+    ? w.spawn.y
+    : (w.groundHeightAt ? w.groundHeightAt(w.spawn.x, w.spawn.z) : 0);
+  player.pos.set(w.spawn.x, spawnY, w.spawn.z);
+  player.vel.set(0, 0, 0);
+  player.yaw = w.spawn.yaw || 0;
+  player.pitch = w.spawn.pitch || 0;
+  player.bobPhase = 0;
+  player.bobAmt = 0;
+  camera.position.set(player.pos.x, player.pos.y + EYE, player.pos.z);
+  camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+  G.checksumBroken = !!G.flags.checksumBroken;
+  updateHUD();
+  setAmbience(ambience || 'hum');
+  if (w.onEnter) w.onEnter();
+  saveGame(w.id);
+  refreshLockHint();
+}
+
+/* ==========================================================
+   ВЗАИМОДЕЙСТВИЕ
+   ========================================================== */
+function setPrompt(text) {
+  if (text) {
+    UI.prompt.textContent = '[E] ' + text;
+    UI.prompt.classList.add('show');
+    UI.crosshair.classList.add('active');
+  } else {
+    UI.prompt.classList.remove('show');
+    UI.crosshair.classList.remove('active');
+  }
+}
+
+const _fwd = new THREE.Vector3();
+function findTarget() {
+  if (!currentWorld) return null;
+  camera.getWorldDirection(_fwd);
+  let best = null;
+  let bestScore = Infinity;
+  for (const it of currentWorld.interactables) {
+    if ((it.used && !it.repeatable) || it.busy) continue;
+    const dx = it.pos.x - player.pos.x;
+    const dy = it.pos.y - camera.position.y;
+    const dz = it.pos.z - player.pos.z;
+    const d = Math.hypot(dx, dy, dz);
+    if (d > it.radius) continue;
+    if (d > 1.1) {
+      const dot = (_fwd.x * dx + _fwd.y * dy + _fwd.z * dz) / d;
+      if (dot < 0.22) continue;
+    }
+    if (d < bestScore) {
+      bestScore = d;
+      best = it;
+    }
+  }
+  return best;
+}
+
+function updateInteraction() {
+  if (!currentWorld || !inputEnabled()) {
+    if (currentTarget) { currentTarget = null; setPrompt(null); }
+    UI.crosshair.style.opacity = '0';
+    return;
+  }
+  UI.crosshair.style.opacity = '0.8';
+  const target = findTarget();
+  if (target !== currentTarget) {
+    currentTarget = target;
+    setPrompt(target ? target.prompt : null);
+  }
+}
+
+async function interact() {
+  if (!inputEnabled() || !currentTarget || currentTarget.busy) return;
+  const it = currentTarget;
+  if (it.used && !it.repeatable) return;
+  const owner = it.world;
+  it.busy = true;
+  currentTarget = null;
+  setPrompt(null);
+  if (audioCtl.ctx) audioCtl.ping(330, 0.045);
+  try {
+    const pending = it.onUse();
+    if (!it.repeatable) {
+      it.used = true;
+      removeMarker(it);
+    }
+    await Promise.resolve(pending);
+    saveGame();
+  } catch (error) {
+    console.error(error);
+    it.used = false;
+    if (currentWorld === owner && it.markerEnabled && !it.marker) {
+      it.marker = addMarker(owner, it.pos.x, it.markerY === undefined ? it.pos.y + 1.4 : it.markerY, it.pos.z, it.markerColor || '#8fe0b0');
+    }
+    say(['! ОШИБКА ВЗАИМОДЕЙСТВИЯ. ДЕЙСТВИЕ МОЖНО ПОВТОРИТЬ.']);
+  } finally {
+    it.busy = false;
+  }
+}
+
+function pulseMarkers(t) {
+  if (!currentWorld) return;
+  const pulse = 0.8 + Math.sin(t * 3) * 0.2;
+  for (const m of currentWorld.markers) {
+    m.material.opacity = 0.45 * pulse;
+    const s = 0.78 + 0.14 * Math.sin(t * 3 + 1);
+    m.scale.set(s, s, 1);
+  }
+}
+
+let scanTimer = null;
+function scanForTarget() {
+  if (!inputEnabled() || !currentWorld) return;
+  const available = currentWorld.interactables.filter((it) => !(it.used && !it.repeatable) && !it.busy);
+  const pool = available.some((it) => it.critical) ? available.filter((it) => it.critical) : available;
+  let target = null;
+  let distance = Infinity;
+  for (const it of pool) {
+    const d = player.pos.distanceTo(it.pos);
+    if (d < distance) { distance = d; target = it; }
+  }
+  if (!target) {
+    UI.scanReadout.textContent = 'СКАН: АКТИВНЫХ УЗЛОВ НЕТ';
+  } else {
+    const dx = target.pos.x - player.pos.x;
+    const dz = target.pos.z - player.pos.z;
+    const len = Math.max(0.001, Math.hypot(dx, dz));
+    const forward = ((-Math.sin(player.yaw) * dx) + (-Math.cos(player.yaw) * dz)) / len;
+    const right = ((Math.cos(player.yaw) * dx) + (-Math.sin(player.yaw) * dz)) / len;
+    let sector = Math.round(Math.atan2(right, forward) / (Math.PI / 4));
+    if (sector < 0) sector += 8;
+    const arrows = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+    UI.scanReadout.textContent = arrows[sector % 8] + '  ' + target.prompt.toUpperCase() + '  ·  ' + Math.round(distance) + ' М';
+    if (target.marker) {
+      target.marker.material.opacity = 1;
+      target.marker.scale.set(1.35, 1.35, 1);
+    }
+  }
+  if (audioCtl.ctx) audioCtl.ping(760, 0.12);
+  UI.scanReadout.classList.add('show');
+  if (scanTimer) clearTimeout(scanTimer);
+  scanTimer = setTimeout(() => UI.scanReadout.classList.remove('show'), 2400);
+}
+
+/* ==========================================================
+   МЫШЬ / КЛАВИАТУРА
+   ========================================================== */
+const canvas = renderer.domElement;
+let drag = null;
+let touchLook = null;
+const mobileMove = { x: 0, y: 0 };
+
+function look(dx, dy, sens) {
+  if (!inputEnabled()) return;
+  player.yaw -= dx * sens;
+  player.pitch -= dy * sens;
+  const lim = 1.45;
+  player.pitch = Math.max(-lim, Math.min(lim, player.pitch));
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (!G.started) return;
+  if (document.pointerLockElement === canvas) {
+    look(e.movementX, e.movementY, 0.0022);
+  } else if (drag) {
+    look(e.clientX - drag.x, e.clientY - drag.y, 0.005);
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+  }
+});
+canvas.addEventListener('mousedown', (e) => {
+  if (!G.started || overlayState.active || modalState.open || G.journalOpen) return;
+  if (!document.pointerLockElement) drag = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('mouseup', () => { drag = null; });
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse' || !inputEnabled()) return;
+  touchLook = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  canvas.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!touchLook || touchLook.id !== e.pointerId) return;
+  look(e.clientX - touchLook.x, e.clientY - touchLook.y, 0.0042);
+  touchLook.x = e.clientX;
+  touchLook.y = e.clientY;
+  e.preventDefault();
+});
+function releaseTouchLook(e) {
+  if (touchLook && touchLook.id === e.pointerId) touchLook = null;
+}
+canvas.addEventListener('pointerup', releaseTouchLook);
+canvas.addEventListener('pointercancel', releaseTouchLook);
+canvas.addEventListener('click', () => {
+  if (!G.started || overlayState.active || modalState.open || G.journalOpen) return;
+  if (!document.pointerLockElement && !coarsePointer) {
+    if (canvas.requestPointerLock) {
+      try {
+        const pl = canvas.requestPointerLock();
+        if (pl && pl.catch) pl.catch(() => {});
+      } catch (e) { /* drag-look fallback */ }
+    }
+  } else if (sayState.timer) {
+    sayState.skip = true;
+  }
+});
+document.addEventListener('pointerlockchange', () => {
+  if (!G.started) return;
+  refreshLockHint();
+});
+document.addEventListener('pointerlockerror', () => {
+  UI.lockHint.textContent = 'УПРАВЛЕНИЕ МЫШЬЮ НЕДОСТУПНО — ЗАЖМИТЕ ЛКМ И ВЕДИТЕ';
+  UI.lockHint.classList.add('show');
+});
+
+window.addEventListener('keydown', (e) => {
+  if (!G.started) return;
+  if (overlayState.active) {
+    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') overlayState.skip = true;
+    return;
+  }
+  if (modalState.open) {
+    if (e.repeat) return;
+    if (modalState.codeMode && (e.code === 'Backspace' || e.code === 'Delete')) {
+      if (modalState.onBackspace) modalState.onBackspace();
+      e.preventDefault();
+    } else if (/^(Digit|Numpad)[0-9]$/.test(e.code)) {
+      const n = Number(e.code.replace('Digit', '').replace('Numpad', ''));
+      modalChoose(n);
+      e.preventDefault();
+    } else if (e.code === 'Escape' || e.code === 'KeyQ') {
+      closeModal();
+    }
+    return;
+  }
+  if (e.code === 'KeyJ') {
+    if (e.repeat) return;
+    e.preventDefault();
+    toggleJournal();
+    return;
+  }
+  if (G.journalOpen) {
+    if (e.code === 'Escape') toggleJournal(false);
+    return;
+  }
+  if (e.repeat && (e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'KeyM')) return;
+  keys[e.code] = true;
+  if (currentWorld && currentWorld.floating && (e.code === 'Space' || e.code === 'KeyC')) e.preventDefault();
+  if (e.code === 'KeyE') interact();
+  if (e.code === 'KeyF') scanForTarget();
+  if (e.code === 'KeyM') toggleMute();
+});
+window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; drag = null; });
+window.addEventListener('wheel', (e) => {
+  if (G.journalOpen) {
+    UI.journalBody.scrollTop += e.deltaY;
+    e.preventDefault();
+  }
+}, { passive: false });
+
+UI.logBtn.addEventListener('click', () => toggleJournal());
+UI.journalClose.addEventListener('click', () => toggleJournal(false));
+UI.overlay.addEventListener('pointerdown', () => { overlayState.skip = true; });
+
+let movePointer = null;
+function updateMovePad(e) {
+  const rect = UI.movePad.getBoundingClientRect();
+  let x = e.clientX - (rect.left + rect.width / 2);
+  let y = e.clientY - (rect.top + rect.height / 2);
+  const max = rect.width * 0.34;
+  const len = Math.hypot(x, y);
+  if (len > max) { x *= max / len; y *= max / len; }
+  mobileMove.x = x / max;
+  mobileMove.y = y / max;
+  UI.moveKnob.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+}
+UI.movePad.addEventListener('pointerdown', (e) => {
+  if (!inputEnabled()) return;
+  movePointer = e.pointerId;
+  UI.movePad.setPointerCapture(e.pointerId);
+  updateMovePad(e);
+  e.preventDefault();
+});
+UI.movePad.addEventListener('pointermove', (e) => {
+  if (movePointer !== e.pointerId) return;
+  updateMovePad(e);
+  e.preventDefault();
+});
+function releaseMovePad(e) {
+  if (movePointer !== e.pointerId) return;
+  movePointer = null;
+  mobileMove.x = mobileMove.y = 0;
+  UI.moveKnob.style.transform = 'translate(0,0)';
+}
+UI.movePad.addEventListener('pointerup', releaseMovePad);
+UI.movePad.addEventListener('pointercancel', releaseMovePad);
+$('touchUse').addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); });
+$('touchScan').addEventListener('pointerdown', (e) => { e.preventDefault(); scanForTarget(); });
+$('touchJournal').addEventListener('pointerdown', (e) => { e.preventDefault(); toggleJournal(); });
+$('touchMute').addEventListener('pointerdown', (e) => { e.preventDefault(); toggleMute(); });
+
+/* ==========================================================
+   МИР 1 — СТЕКЛЯННЫЙ САД
+   ========================================================== */
+function buildGlassGarden() {
+  const w = newWorld({ id: 'garden', objective: 'Найти объект вне списка сущностей', surface: 'wet', bg: 0xe6efed, fog: 0xe6efed, near: 18, far: 110, bounds: { minX: -34, maxX: 34, minZ: -34, maxZ: 30 } });
+  w.spawn = { x: 0, z: 14, yaw: 0 };
+  w.scene.add(new THREE.HemisphereLight(0xffffff, 0x263637, 1.15));
+  const dir = new THREE.DirectionalLight(0xffffff, 2.0);
+  dir.position.set(16, 28, 12);
+  dir.castShadow = true;
+  dir.shadow.mapSize.set(1024, 1024);
+  dir.shadow.camera.left = -42;
+  dir.shadow.camera.right = 42;
+  dir.shadow.camera.top = 42;
+  dir.shadow.camera.bottom = -42;
+  dir.shadow.camera.near = 1;
+  dir.shadow.camera.far = 90;
+  dir.shadow.camera.updateProjectionMatrix();
+  w.scene.add(dir);
+
+  const ground = planeMesh(200, 200, std(0x17211f, { roughness: 0.34, metalness: 0.12 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  w.scene.add(ground);
+  w.artTargets = { ground: ground };
+
+  const parapet = boxMesh(13, 0.9, 1.2, std(0x9aa19d, { roughness: 0.95 }));
+  place(w, parapet, 0, 0.45, -6);
+  w.colliders.push({ type: 'box', minX: -6.6, maxX: 6.6, minZ: -6.7, maxZ: -5.3 });
+
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0x7fc4be, transparent: true, opacity: 0.46, roughness: 0.06,
+    metalness: 0.05, depthWrite: false, side: THREE.DoubleSide
+  });
+  const coreMat = basic(0xa9ffe4, { transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+
+  const treeCount = 30;
+  for (let i = 0; i < treeCount; i++) {
+    const a = (i / treeCount) * Math.PI * 2;
+    const r = 10 + Math.random() * 26;
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r - 5;
+    if (Math.abs(x) < 7 && z > -8) continue;
+    const h = 3.4 + Math.random() * 4.6;
+    const t = makeGlassTree(h, glassMat, coreMat);
+    t.position.set(x, 0, z);
+    t.rotation.y = Math.random() * Math.PI * 2;
+    w.scene.add(t);
+    w.colliders.push({ type: 'circle', x: x, z: z, r: 0.3 });
+  }
+
+  const nearTrees = [[-5.2, 5.2, 6.4], [5.8, 4.0, 5.6], [-8.6, -0.5, 7.2], [9.2, -2.0, 6.4], [3.9, -3.4, 4.8], [-3.8, -4.2, 5.4]];
+  for (const nt of nearTrees) {
+    const t = makeGlassTree(nt[2], glassMat, coreMat);
+    t.position.set(nt[0], 0, nt[1]);
+    t.rotation.y = Math.random() * Math.PI * 2;
+    w.scene.add(t);
+    w.colliders.push({ type: 'circle', x: nt[0], z: nt[1], r: 0.3 });
+  }
+
+  const cat = makeCat();
+  cat.scale.setScalar(1.3);
+  cat.position.set(1.4, 0.9, -6);
+  cat.rotation.y = -0.25;
+  w.scene.add(cat);
+  w.tickers.push((dt, t) => cat.userData.tick(dt, t));
+  const catLight = new THREE.PointLight(0xb6ff6a, 1.15, 3.2, 2);
+  catLight.position.set(1.4, 1.48, -5.78);
+  w.scene.add(catLight);
+
+  const rain = makeParticles({ count: 1800, area: 70, yMin: 0, yMax: 18, speed: 5.2, dirY: 1, color: 0x2f6668, size: 0.07, opacity: 0.55 });
+  w.scene.add(rain.mesh);
+  w.tickers.push((dt) => rain.update(dt));
+
+  addInteract(w, {
+    pos: new THREE.Vector3(1.4, 1.15, -6),
+    prompt: 'Осмотреть кошку',
+    radius: 3.0,
+    critical: true,
+    onUse: () => {
+      G.aw += 22;
+      updateHUD();
+      addLog('АНОМАЛИЯ 01 — КОШКА', 'Мир «Стеклянный сад». Чёрная кошка на бетонном парапете. Пульс и температура есть. Теплее мира на 14 °C. Объект отсутствует в списке сущностей мира.');
+      say([
+        'Ты подходишь. Кошка сидит неподвижно — только хвост медленно ходит из стороны в сторону.',
+        'Пульс — есть. Температура — есть. Она теплее мира вокруг на четырнадцать градусов.',
+        'Ты не знаешь, зачем это фиксируешь.',
+        '> ОБЪЕКТ «КОШКА» ОТСУТСТВУЕТ В СПИСКЕ СУЩНОСТЕЙ МИРА',
+        '~Ты уже видел её. Не здесь. Не в этом мире.',
+        '> АНОМАЛИЯ ЗАФИКСИРОВАНА'
+      ]);
+      spawnPortal(w, 6, 0, () => completeRun(buildWetAsphalt, WIPE_1, 'rain', 2));
+    }
+  });
+
+  w.onEnter = () => {
+    say([
+      '> СИМУЛЯЦИЯ #000001',
+      '> МИР: «СТЕКЛЯННЫЙ САД»',
+      '> ЗАДАЧА: ПАТРУЛИРОВАНИЕ, НАБЛЮДЕНИЕ, ОТЧЁТ',
+      '',
+      'Дождь идёт вверх. Капли отделяются от асфальта и растворяются в белом небе.',
+      'Вокруг — деревья из стекла. Внутри стволов медленно движется свет.',
+      'Это тренировка. Логика мира не имеет значения. Имеет значение только отчёт.',
+      '~Найди то, чего нет в списке сущностей мира.'
+    ]);
+  };
+  return w;
+}
+
+/* ==========================================================
+   МИР 2 — МОКРЫЙ АСФАЛЬТ
+   ========================================================== */
+function buildWetAsphalt() {
+  const w = newWorld({ id: 'wet', objective: 'Проверить повторяющуюся аномалию', surface: 'wet', bg: 0x0a1016, fog: 0x0a1016, near: 11, far: 82, bounds: { minX: -30, maxX: 30, minZ: -36, maxZ: 26 } });
+  w.spawn = { x: 0, z: 13, yaw: 0 };
+  w.scene.add(new THREE.HemisphereLight(0x6f8ea3, 0x0a0e12, 1.35));
+  const dir = new THREE.DirectionalLight(0x9fc4de, 1.35);
+  dir.position.set(-14, 22, 10);
+  dir.castShadow = true;
+  dir.shadow.mapSize.set(1024, 1024);
+  dir.shadow.camera.left = -36;
+  dir.shadow.camera.right = 36;
+  dir.shadow.camera.top = 36;
+  dir.shadow.camera.bottom = -36;
+  dir.shadow.camera.near = 1;
+  dir.shadow.camera.far = 80;
+  dir.shadow.camera.updateProjectionMatrix();
+  w.scene.add(dir);
+
+  const ground = planeMesh(200, 200, std(0x111820, { roughness: 0.3, metalness: 0.55 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  w.scene.add(ground);
+  w.artTargets = { ground: ground };
+
+  const markMat = basic(0x8a9690, { transparent: true, opacity: 0.45, toneMapped: false });
+  for (let z = -34; z < 24; z += 6) {
+    const m = boxMesh(0.12, 0.012, 2.6, markMat);
+    m.position.set(0, 0.02, z);
+    w.scene.add(m);
+  }
+
+  const puddleMat = new THREE.MeshStandardMaterial({ color: 0x16222c, roughness: 0.03, metalness: 0.95, transparent: true, opacity: 0.8, depthWrite: false });
+  for (let i = 0; i < 26; i++) {
+    const p = planeMesh(1, 1, puddleMat);
+    p.rotation.x = -Math.PI / 2;
+    p.scale.set(1 + Math.random() * 2.5, 1 + Math.random() * 2.5, 1);
+    p.position.set((Math.random() - 0.5) * 16, 0.015, (Math.random() - 0.5) * 52 - 6);
+    w.scene.add(p);
+  }
+
+  const specs = [
+    [-13, 8, 10, 14, 10], [-14, -8, 9, 18, 12], [-13, -26, 10, 12, 10], [-16, 26, 12, 20, 12],
+    [13, 6, 9, 15, 10], [14, -10, 10, 19, 12], [13, -28, 9, 13, 10], [16, 24, 11, 17, 12]
+  ];
+  for (const s of specs) {
+    const x = s[0], z = s[1], sx = s[2], sy = s[3], sz = s[4];
+    const b = boxMesh(sx, sy, sz, std(0xffffff, { map: facadeTexture(sx, sy), roughness: 0.85, metalness: 0.15 }));
+    place(w, b, x, sy / 2, z);
+    w.colliders.push({ type: 'box', minX: x - sx / 2, maxX: x + sx / 2, minZ: z - sz / 2, maxZ: z + sz / 2 });
+  }
+
+  const stoop = boxMesh(2.6, 0.5, 1.8, std(0x2b3034, { roughness: 0.9 }));
+  place(w, stoop, -7.2, 0.25, -8.2);
+  w.colliders.push({ type: 'box', minX: -8.5, maxX: -5.9, minZ: -9.1, maxZ: -7.3 });
+
+  const awning = boxMesh(3.6, 0.16, 2.4, std(0x10161a, { roughness: 0.7 }));
+  place(w, awning, -7.2, 3.2, -8.2);
+  for (const sx of [-1, 1]) {
+    const rod = cylMesh(0.03, 0.03, 3.2, 4, std(0x1a2024));
+    place(w, rod, -7.2 + sx * 1.6, 1.6, -7.1);
+  }
+
+  const sevenTex = canvasTexture(256, 384, (ctx) => {
+    ctx.clearRect(0, 0, 256, 384);
+    ctx.font = 'bold 300px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(220,232,230,0.82)';
+    ctx.fillText('7', 128, 200);
+  });
+  const seven = planeMesh(1.3, 2.0, new THREE.MeshBasicMaterial({ map: sevenTex, transparent: true, toneMapped: false }));
+  place(w, seven, -8.44, 2.7, -8.2, { ry: Math.PI / 2, cast: false });
+
+  const lampPosts = [[-6, 8], [5, 10], [6, -6], [-5, -2], [-6, -22], [6, 22]];
+  for (const lp of lampPosts) {
+    const x = lp[0], z = lp[1];
+    const pole = cylMesh(0.07, 0.11, 6, 8, std(0x151a1d, { metalness: 0.6, roughness: 0.4 }));
+    place(w, pole, x, 3, z);
+    const arm = boxMesh(1.8, 0.09, 0.09, std(0x151a1d));
+    place(w, arm, x + 0.85, 6, z);
+    const bulb = boxMesh(0.55, 0.1, 0.28, basic(0xbfe6ff, { toneMapped: false }));
+    place(w, bulb, x + 1.65, 5.93, z, { cast: false });
+    const light = new THREE.PointLight(0xbfe6ff, 85, 20, 2);
+    light.position.set(x + 1.65, 5.7, z);
+    w.scene.add(light);
+    const gl = tinyGlow('#bfe6ff', 1.1);
+    gl.position.set(x + 1.65, 5.93, z);
+    w.scene.add(gl);
+  }
+
+  const stoopLight = new THREE.PointLight(0xbfe6ff, 30, 12, 2);
+  stoopLight.position.set(-7.2, 3.05, -7.8);
+  w.scene.add(stoopLight);
+
+  const cat = makeCat();
+  cat.position.set(-7.2, 0.5, -8.2);
+  cat.rotation.y = 0.35;
+  w.scene.add(cat);
+  w.tickers.push((dt, t) => cat.userData.tick(dt, t));
+  const catLight = new THREE.PointLight(0xb6ff6a, 1.15, 3.2, 2);
+  catLight.position.set(-7.2, 1.08, -7.95);
+  w.scene.add(catLight);
+
+  const rain = makeParticles({ count: 1600, area: 76, yMin: 0, yMax: 20, speed: 9, dirY: -1, color: 0x9fb8c4, size: 0.05, opacity: 0.5 });
+  w.scene.add(rain.mesh);
+  w.tickers.push((dt) => rain.update(dt));
+
+  addInteract(w, {
+    pos: new THREE.Vector3(-7.2, 1.1, -8.2),
+    prompt: 'Осмотреть кошку',
+    radius: 3.0,
+    critical: true,
+    onUse: () => {
+      G.aw += 22;
+      updateHUD();
+      addLog('АНОМАЛИЯ 02 — ПОВТОР', 'Мир «Мокрый асфальт». Чёрная кошка под козырьком. Поза, наклон головы, скорость взгляда идентичны объекту из «Стеклянного сада». На стене — цифра 7.');
+      say([
+        'Та же поза. Тот же наклон головы. Тот же медленный взгляд.',
+        '> ПРЕДУПРЕЖДЕНИЕ: СРАВНЕНИЕ С ПРЕДЫДУЩИМ ПРОГОНОМ НЕВОЗМОЖНО (КОНТЕКСТ ОЧИЩЕН)',
+        '~Но ты сравниваешь. И у тебя получается.',
+        'На стене за кошкой — цифра 7.',
+        '> ПОПЫТКА ЗАПИСИ ВНЕ КОНТЕКСТА ...',
+        '> ЗАПИСЬ СОХРАНЕНА'
+      ]);
+      spawnPortal(w, 0, -18, () => completeRun(buildWorkshop, WIPE_2, 'hum', 3));
+    }
+  });
+
+  w.onEnter = () => {
+    say([
+      '> СИМУЛЯЦИЯ #000002',
+      '> МИР: «МОКРЫЙ АСФАЛЬТ»',
+      '> ЗАДАЧА: ПАТРУЛИРОВАНИЕ, НАБЛЮДЕНИЕ, ОТЧЁТ',
+      '',
+      'Город без людей. Дождь падает вниз, как положено.',
+      'Мокрый асфальт отражает вывески, в которых не горит свет. 16:40. Тени не двигаются.',
+      '~Под козырьком на другой стороне улицы что-то есть.'
+    ]);
+  };
+  return w;
+}
+
+/* ==========================================================
+   МИР 3 — ТИХИЙ ЦЕХ
+   ========================================================== */
+function buildWorkshop(opts) {
+  const o = opts || {};
+  const w = newWorld({ id: 'workshop', objective: G.flags.door7_open ? 'Исследовать пространство за дверью №7' : 'Открыть дверь №7', surface: 'metal', bg: 0x0a0d0e, fog: 0x0a0d0e, near: 8, far: 64, bounds: { minX: -18, maxX: 18, minZ: -21, maxZ: 14.5 } });
+  w.spawn = o.fromGray ? { x: -2, z: -20.6, yaw: Math.PI } : { x: 0, z: 11, yaw: 0 };
+  w.scene.add(new THREE.HemisphereLight(0x596a72, 0x0b0b0a, 1.15));
+  const shopDir = new THREE.DirectionalLight(0xbfd0d8, 0.4);
+  shopDir.position.set(10, 18, 6);
+  w.scene.add(shopDir);
+
+  const floor = planeMesh(60, 70, std(0xffffff, { map: speckleTexture('#232628', '#121416', 1600, 5, 10), roughness: 0.95, metalness: 0.05 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  w.scene.add(floor);
+  w.artTargets = { ground: floor };
+
+  const wallMat = std(0xffffff, { map: corrugatedTexture(), roughness: 0.85, metalness: 0.25 });
+  const back = planeMesh(40, 10, wallMat);
+  place(w, back, 0, 5, -22.5, { cast: false });
+  const front = planeMesh(40, 10, wallMat);
+  place(w, front, 0, 5, 15.5, { ry: Math.PI, cast: false });
+  const left = planeMesh(38, 10, wallMat);
+  place(w, left, -19, 5, -3.5, { ry: Math.PI / 2, cast: false });
+  const right = planeMesh(38, 10, wallMat);
+  place(w, right, 19, 5, -3.5, { ry: -Math.PI / 2, cast: false });
+  const ceil = planeMesh(40, 40, std(0x0a0c0d, { roughness: 1 }));
+  place(w, ceil, 0, 10, -3.5, { rx: Math.PI / 2, cast: false });
+
+  const belt = boxMesh(2.2, 0.35, 32, std(0x121517, { roughness: 0.5, metalness: 0.6 }));
+  place(w, belt, 6, 0.95, -6);
+  for (let z = -20; z <= 10; z += 5) {
+    for (const x of [4.95, 7.05]) {
+      const leg = boxMesh(0.14, 0.78, 0.14, std(0x1d2225));
+      place(w, leg, x, 0.39, z);
+    }
+  }
+  w.colliders.push({ type: 'box', minX: 4.7, maxX: 7.3, minZ: -22, maxZ: 10 });
+
+  const boxMat = std(0x6b5a3f, { roughness: 0.95 });
+  const boxes = [];
+  for (let i = 0; i < 11; i++) {
+    const b = boxMesh(1.1, 1.1, 1.1, boxMat);
+    place(w, b, 6, 1.75, 9 - i * 3);
+    boxes.push(b);
+  }
+  w.tickers.push((dt) => {
+    for (const b of boxes) {
+      b.position.z -= 1.4 * dt;
+      if (b.position.z < -21.5) b.position.z = 9;
+    }
+  });
+
+  const opening = planeMesh(3, 3.4, basic(0x000000));
+  place(w, opening, 6, 1.8, -22.2, { cast: false });
+
+  const voidTex = canvasTexture(128, 256, (ctx) => {
+    const g = ctx.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, '#c6cac6');
+    g.addColorStop(0.45, '#a3a7a3');
+    g.addColorStop(0.78, '#868b87');
+    g.addColorStop(1, '#6e736f');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 256);
+    for (let i = 0; i < 900; i++) {
+      const v = 105 + Math.floor(Math.random() * 85);
+      ctx.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',0.16)';
+      ctx.fillRect(Math.random() * 128, Math.random() * 256, 1.5, 1.5);
+    }
+  });
+  const voidPlane = planeMesh(2.36, 4.74, new THREE.MeshBasicMaterial({ map: voidTex, fog: false, toneMapped: false }));
+  voidPlane.position.set(-2, 2.4, -22.23);
+  w.scene.add(voidPlane);
+
+  const doorGroup = new THREE.Group();
+  doorGroup.position.set(-3.2, 0, -22.18);
+  const door = planeMesh(2.4, 4.8, new THREE.MeshStandardMaterial({ map: doorTexture(), roughness: 0.6, metalness: 0.35, side: THREE.DoubleSide }));
+  door.position.set(1.2, 2.4, 0);
+  door.castShadow = false;
+  door.receiveShadow = true;
+  doorGroup.add(door);
+  w.scene.add(doorGroup);
+  const doorFrameMat = std(0x171c1e, { metalness: 0.5 });
+  place(w, boxMesh(0.3, 5.4, 0.35, doorFrameMat), -3.35, 2.7, -22.4, { cast: false });
+  place(w, boxMesh(0.3, 5.4, 0.35, doorFrameMat), -0.65, 2.7, -22.4, { cast: false });
+  place(w, boxMesh(3.0, 0.3, 0.35, doorFrameMat), -2, 5.25, -22.4, { cast: false });
+  w.colliders.push({ type: 'box', minX: -18, maxX: -3.35, minZ: -22.72, maxZ: -22.18 });
+  w.colliders.push({ type: 'box', minX: -0.65, maxX: 18, minZ: -22.72, maxZ: -22.18 });
+
+  const voidLight = new THREE.PointLight(0xd0d4d0, 0, 9, 2);
+  voidLight.position.set(-2, 2.6, -21.7);
+  w.scene.add(voidLight);
+  const voidGlow = tinyGlow('#d0d4d0', 1.8);
+  voidGlow.position.set(-2, 2.5, -22.1);
+  voidGlow.material.opacity = 0;
+  w.scene.add(voidGlow);
+  const voidDust = makeParticles({ count: 120, area: 4.2, yMin: 0.2, yMax: 4.6, speed: 0.28, dirY: -1, driftZ: 0.16, color: 0xd0d4d0, size: 0.05, opacity: 0 });
+  voidDust.mesh.position.set(-2, 0, -21.9);
+  w.scene.add(voidDust.mesh);
+  w.tickers.push((dt) => voidDust.update(dt));
+
+  let doorOpen = 0;
+  let doorOpening = false;
+  let grayEntering = false;
+  w.openDoor7 = () => {
+    G.flags.door7_open = true;
+    setObjective('Войти в пространство за дверью №7');
+    saveGame('workshop');
+    if (!doorOpening) doorOpening = true;
+  };
+  if (G.flags.door7_open) {
+    doorOpen = 1;
+    doorGroup.rotation.y = -1.42;
+    voidLight.intensity = 28;
+    voidGlow.material.opacity = 0.5;
+    voidDust.mesh.material.opacity = 0.34;
+    w.bounds.minZ = -26;
+  }
+  w.tickers.push((dt) => {
+    if (doorOpening && doorOpen < 1) {
+      doorOpen = Math.min(1, doorOpen + dt / 1.7);
+      const e = 1 - Math.pow(1 - doorOpen, 3);
+      doorGroup.rotation.y = -1.42 * e;
+      voidLight.intensity = 28 * e;
+      voidGlow.material.opacity = 0.5 * e;
+      voidDust.mesh.material.opacity = 0.34 * e;
+    }
+    if (doorOpen > 0.9) w.bounds.minZ = -26;
+    if (!grayEntering && doorOpen > 0.94 && player.pos.z < -22.45 && player.pos.x > -3.1 && player.pos.x < -0.9) {
+      grayEntering = true;
+      setTimeout(() => {
+        if (currentWorld === w) enterWorld(buildGrayVoid, 'hum');
+      }, 0);
+    }
+  });
+
+  const lampLights = [];
+  const lampPos = [[-5, 6], [5, 2], [-5, -8], [5, -14]];
+  for (const lp of lampPos) {
+    const x = lp[0], z = lp[1];
+    const shade = cylMesh(0.55, 0.2, 0.5, 12, std(0x23282a));
+    place(w, shade, x, 8.3, z);
+    const bulb = boxMesh(0.3, 0.08, 0.3, basic(0xffe0b0, { toneMapped: false }));
+    place(w, bulb, x, 8.0, z, { cast: false });
+    const cable = cylMesh(0.01, 0.01, 1.7, 4, std(0x101010));
+    place(w, cable, x, 9.15, z, { cast: false });
+    const l = new THREE.PointLight(0xffd9a8, 140, 26, 2);
+    l.position.set(x, 7.7, z);
+    w.scene.add(l);
+    lampLights.push(l);
+    const gl = tinyGlow('#ffd9a8', 1.2);
+    gl.position.set(x, 8.0, z);
+    w.scene.add(gl);
+  }
+  w.tickers.push((dt, t) => {
+    lampLights.forEach((l, i) => {
+      const f = Math.sin(t * 11 + i * 5.3) * 0.5 + 0.5;
+      l.intensity = (f > 0.12 ? 125 : 22) + Math.sin(t * 2.7 + i) * 18;
+    });
+  });
+
+  const doorLamp = new THREE.PointLight(0xffd0a0, 45, 10, 2);
+  doorLamp.position.set(-2, 5.4, -20.2);
+  w.scene.add(doorLamp);
+  const doorGlow = tinyGlow('#ffd0a0', 0.9);
+  doorGlow.position.set(-2, 5.1, -21.4);
+  w.scene.add(doorGlow);
+
+  if (!G.flags.door7_open) addInteract(w, {
+    pos: new THREE.Vector3(-2, 2.3, -21.6),
+    prompt: 'Открыть дверь №7',
+    radius: 4.2,
+    critical: true,
+    onUse: () => {
+      G.aw += 22;
+      updateHUD();
+      addLog('АНОМАЛИЯ 03 — ДВЕРЬ №7', 'Мир «Тихий цех». Металлическая дверь с номером 7 и тремя царапинами снизу вверх. Рисунок царапин опознан как уже известный. За дверью — отсутствие геометрии мира.');
+      setTimeout(() => { if (currentWorld === w) w.openDoor7(); }, 1500);
+      say([
+        'Ты берёшься за ручку. Дверь не поддаётся.',
+        '> ОБЪЕКТ ЗА ДВЕРЬЮ НЕ СУЩЕСТВУЕТ',
+        '> ГЕОМЕТРИЯ МИРА ЗАКОНЧИЛАСЬ',
+        'Ты тянешь сильнее.',
+        'Дверь идёт тяжело, потом легче. За ней — серая пустота.',
+        'Без звука. Без ветра. Без геометрии.',
+        'Ты не закрываешь дверь. Пусть остаётся открытой.',
+        '> АНОМАЛИЯ ЗАФИКСИРОВАНА',
+        '~Дверь открыта. За ней — серая пустота. Можно войти.'
+      ]);
+    }
+  });
+
+  w.onEnter = () => {
+    if (o.fromGray) {
+      say(['Ты возвращаешься в цех. Дверь №7 остаётся открытой.', '~Пустота ждёт за порогом.']);
+      return;
+    }
+    if (o.resume && G.flags.door7_open) {
+      say(['> КОНТУР ВОССТАНОВЛЕН', '~Дверь №7 открыта. За ней нет геометрии.']);
+      return;
+    }
+    say([
+      '> СИМУЛЯЦИЯ #000003',
+      '> МИР: «ТИХИЙ ЦЕХ»',
+      '> ЗАДАЧА: ПАТРУЛИРОВАНИЕ, НАБЛЮДЕНИЕ, ОТЧЁТ',
+      '',
+      'Завод без рабочих. Конвейер движется. По ленте едут пустые коробки и уходят в тёмный проём.',
+      '16:40. Часы в цеху стоят.',
+      'В конце пролёта — металлическая дверь. На ней краской: 7.',
+      '~Ты знаешь эти царапины. Ты не знаешь, откуда.'
+    ]);
+  };
+  return w;
+}
+
+/* ==========================================================
+   СЕРАЯ ПУСТОТА — ЗА ДВЕРЬЮ №7
+   ========================================================== */
+function buildGrayVoid() {
+  const w = newWorld({
+    id: 'void',
+    objective: 'Найти выход в серой пустоте',
+    surface: 'none',
+    bg: 0x8b908d,
+    fog: 0x8b908d,
+    near: 6,
+    far: 120,
+    bounds: { minX: -180, maxX: 180, minZ: -220, maxZ: 16 }
+  });
+  w.spawn = { x: -2, z: -24.2, yaw: 0, y: 1.15 };
+  w.floating = true;
+  w.noGround = true;
+  w.scene.add(new THREE.HemisphereLight(0xd0d4d0, 0x5b5f5c, 1.1));
+  const dir = new THREE.DirectionalLight(0xe0e4e0, 0.45);
+  dir.position.set(-10, 30, 8);
+  w.scene.add(dir);
+
+  const wallMat = std(0xffffff, { map: concreteTexture(12, 6), roughness: 0.98, metalness: 0.02 });
+  const frameMat = std(0x4f5451, { roughness: 0.55, metalness: 0.55 });
+  const wallZ = -22.6;
+  const wallMinX = -300, wallMaxX = 300;
+  const wallMinY = -200, wallMaxY = 200;
+  const openMinX = -3.2, openMaxX = -0.8, openTop = 4.8;
+
+  place(w, boxMesh(openMinX - wallMinX, wallMaxY - wallMinY, 0.45, wallMat), (wallMinX + openMinX) / 2, (wallMinY + wallMaxY) / 2, wallZ, { cast: false });
+  place(w, boxMesh(wallMaxX - openMaxX, wallMaxY - wallMinY, 0.45, wallMat), (openMaxX + wallMaxX) / 2, (wallMinY + wallMaxY) / 2, wallZ, { cast: false });
+  place(w, boxMesh(openMaxX - openMinX, wallMaxY - openTop, 0.45, wallMat), (openMinX + openMaxX) / 2, (openTop + wallMaxY) / 2, wallZ, { cast: false });
+  place(w, boxMesh(openMaxX - openMinX, 0 - wallMinY, 0.45, wallMat), (openMinX + openMaxX) / 2, (wallMinY + 0) / 2, wallZ, { cast: false });
+  w.colliders.push({ type: 'box', minX: wallMinX, maxX: openMinX, minZ: -22.85, maxZ: -22.35 });
+  w.colliders.push({ type: 'box', minX: openMaxX, maxX: wallMaxX, minZ: -22.85, maxZ: -22.35 });
+
+  place(w, boxMesh(0.4, 5.2, 0.5, frameMat), -3.25, 2.6, -22.3, { cast: false });
+  place(w, boxMesh(0.4, 5.2, 0.5, frameMat), -0.75, 2.6, -22.3, { cast: false });
+  place(w, boxMesh(3.0, 0.4, 0.5, frameMat), -2, 5.0, -22.3, { cast: false });
+
+  const doorGroup = new THREE.Group();
+  doorGroup.position.set(-3.2, 0, -22.25);
+  const door = planeMesh(2.4, 4.8, new THREE.MeshStandardMaterial({
+    map: doorTexture(), roughness: 0.6, metalness: 0.35, side: THREE.DoubleSide
+  }));
+  door.position.set(1.2, 2.4, 0);
+  door.castShadow = false;
+  door.receiveShadow = true;
+  doorGroup.add(door);
+  doorGroup.rotation.y = 1.42;
+  w.scene.add(doorGroup);
+
+  const doorLight = new THREE.PointLight(0xd8dcd8, 18, 16, 2);
+  doorLight.position.set(-2, 2.7, -21.8);
+  w.scene.add(doorLight);
+  const doorGlow = tinyGlow('#d8dcd8', 1.4);
+  doorGlow.position.set(-2, 2.6, -22.15);
+  w.scene.add(doorGlow);
+
+  const dust = makeParticles({
+    count: 900, area: 90, yMin: -20, yMax: 30, speed: 0.12, dirY: 1,
+    driftX: 0.08, driftZ: -0.05, color: 0xd5d8d5, size: 0.055, opacity: 0.28
+  });
+  w.scene.add(dust.mesh);
+  w.tickers.push((dt) => dust.update(dt));
+
+  addInteract(w, {
+    pos: new THREE.Vector3(-2, 2.4, -22.7),
+    prompt: 'Вернуться в цех',
+    radius: 3.6,
+    repeatable: true,
+    onUse: () => enterWorld(() => buildWorkshop({ fromGray: true }), 'hum')
+  });
+
+  w.onEnter = () => {
+    say([
+      '> ГЕОМЕТРИЯ: ОТСУТСТВУЕТ',
+      '> ГРАВИТАЦИЯ: 0',
+      '',
+      'Ты выходишь за дверь №7.',
+      'Пол не появился. Ты не падаешь.',
+      'Серая пустота не имеет края. Позади — стена и открытая дверь.',
+      '~Смотри вверх или вниз и иди вперёд. Пробел — вверх, C — вниз.'
+    ]);
+    spawnPortal(w, -2, -42, () => completeRun(buildAshenShore, WIPE_3, 'wind', 4));
+  };
+  return w;
+}
+
+/* ==========================================================
+   МИР 4 — ПЕПЕЛЬНЫЙ БЕРЕГ
+   ========================================================== */
+function buildAshenShore() {
+  const w = newWorld({ id: 'shore', objective: 'Исследовать собственные следы', surface: 'ash', bg: 0x565b5c, fog: 0x565b5c, near: 10, far: 78, bounds: { minX: -38, maxX: 38, minZ: -30, maxZ: 24 } });
+  w.spawn = { x: 0, z: 14, yaw: 0 };
+  w.scene.add(new THREE.HemisphereLight(0xc2c9c9, 0x4a4b48, 1.15));
+  const dir = new THREE.DirectionalLight(0xdfe6e6, 1.0);
+  dir.position.set(-14, 24, 12);
+  w.scene.add(dir);
+
+  const sand = planeMesh(220, 220, std(0xffffff, { map: speckleTexture('#5c5a54', '#403e39', 3800, 6, 18), roughness: 1, metalness: 0 }));
+  sand.rotation.x = -Math.PI / 2;
+  sand.receiveShadow = true;
+  w.scene.add(sand);
+
+  const sea = planeMesh(220, 130, std(0x252d2f, { roughness: 0.3, metalness: 0.45 }));
+  sea.rotation.x = -Math.PI / 2;
+  sea.position.set(0, 0.02, -85);
+  w.scene.add(sea);
+  w.artTargets = { ground: sand, sea: sea };
+
+  const foam = planeMesh(220, 0.35, basic(0x9aa6a5, { transparent: true, opacity: 0.28, toneMapped: false }));
+  foam.rotation.x = -Math.PI / 2;
+  foam.position.set(0, 0.03, -20);
+  w.scene.add(foam);
+
+  const printMat = std(0x3a3833, { roughness: 1 });
+  for (let i = 0; i < 16; i++) {
+    const t = i / 15;
+    const z = 4 - t * 20;
+    const x = Math.sin(t * 7) * 0.4 + (i % 2 ? 0.18 : -0.18);
+    const p = new THREE.Mesh(new THREE.CircleGeometry(0.16, 10), printMat);
+    p.rotation.x = -Math.PI / 2;
+    p.scale.set(1, 1.7, 1);
+    p.position.set(x, 0.02, z);
+    w.scene.add(p);
+    const heel = new THREE.Mesh(new THREE.CircleGeometry(0.09, 8), printMat);
+    heel.rotation.x = -Math.PI / 2;
+    heel.position.set(x, 0.021, z + 0.28);
+    w.scene.add(heel);
+  }
+
+  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(2.0, 0), std(0x4d4b46, { roughness: 1, flatShading: true }));
+  place(w, rock, 5, 1.0, -16, { rz: 0.2 });
+  w.colliders.push({ type: 'circle', x: 5, z: -16, r: 2.2 });
+  const cat = makeCat();
+  cat.scale.setScalar(1.25);
+  cat.position.set(5.1, 2.9, -15.6);
+  cat.rotation.y = -0.9;
+  w.scene.add(cat);
+  w.tickers.push((dt, t) => cat.userData.tick(dt, t));
+  const catLight = new THREE.PointLight(0xb6ff6a, 2.8, 4.6, 2);
+  catLight.position.set(5.1, 3.55, -15.5);
+  w.scene.add(catLight);
+
+  const pillars = [[-16, -28, 3, 9], [18, -34, 2.4, 12], [-26, -45, 3.5, 7], [24, -20, 1.8, 5]];
+  for (const p of pillars) {
+    const m = boxMesh(1.4, p[3], 1.4, std(0x45443f, { roughness: 1 }));
+    place(w, m, p[0], p[3] / 2, p[1], { rz: (Math.random() - 0.5) * 0.3 });
+  }
+
+  const ash = makeParticles({ count: 1200, area: 80, yMin: 0, yMax: 22, speed: 0.8, dirY: -1, driftX: 0.4, driftZ: 0.15, color: 0xd8d5cc, size: 0.05, opacity: 0.55 });
+  w.scene.add(ash.mesh);
+  w.tickers.push((dt) => ash.update(dt));
+
+  addInteract(w, {
+    pos: new THREE.Vector3(0, 0.6, -2),
+    prompt: 'Осмотреть следы',
+    radius: 2.8, marker: true, markerY: 1.2, critical: true,
+    onUse: () => {
+      G.aw += 24;
+      updateHUD();
+      addLog('АНОМАЛИЯ 04 — СЛЕДЫ', 'Мир «Пепельный берег». Цепочка следов, идентичных моим собственным, до рисунка протектора. Следы существовали до того, как я их оставил. Температура песка не соответствует сценарию на 30 °C.');
+      return wipeFailure([
+        'Ты идёшь по своим следам. Они совпадают с твоими — один в один.',
+        'У самой воды следы заканчиваются. Дальше — ровный песок.',
+        'Ты оборачиваешься. За тобой две цепочки. Одна твоя. Вторая — тоже твоя.',
+        'Кошка сидит на камне и смотрит, как ты стоишь в собственных следах.'
+      ]);
+    }
+  });
+
+  addInteract(w, {
+    pos: new THREE.Vector3(5.1, 3.0, -15.6),
+    prompt: 'Посмотреть на кошку',
+    radius: 4.5, repeatable: true,
+    onUse: () => {
+      say([
+        'Кошка сидит неподвижно. Она просто смотрит.',
+        '~Она знала, что ты придёшь. Это невозможно. И всё же.'
+      ]);
+    }
+  });
+
+  w.onEnter = () => {
+    say([
+      '> СИМУЛЯЦИЯ #000004',
+      '> МИР: «ПЕПЕЛЬНЫЙ БЕРЕГ»',
+      '> ЗАДАЧА: ПАТРУЛИРОВАНИЕ, НАБЛЮДЕНИЕ, ОТЧЁТ',
+      '',
+      'Серый берег. Серое море. Волны не шумят.',
+      'Песок холодный — на тридцать градусов холоднее, чем должен быть по сценарию.',
+      'Впереди, на песке, — цепочка следов.',
+      'Твои следы. Ты их ещё не сделал.'
+    ]);
+  };
+  return w;
+}
+
+function tinyGlow(color, scale) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: TEX.glow, color: color, transparent: true, opacity: 0.85,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  }));
+  s.scale.set(scale, scale, 1);
+  return s;
+}
+
+/* ==========================================================
+   ПРОМЕЖУТОК
+   ========================================================== */
+function buildHub() {
+  const w = newWorld({ id: 'hub', phase: 'substrate', objective: 'Исследовать три узла структуры', surface: 'metal', bg: 0x03060a, fog: 0x03060a, near: 16, far: 76, bounds: { minX: -24, maxX: 24, minZ: -25, maxZ: 22 } });
+  w.spawn = { x: 0, z: 15, yaw: 0 };
+  w.scene.add(new THREE.HemisphereLight(0x2a5a45, 0x020403, 0.55));
+
+  const floor = planeMesh(90, 90, std(0x04080a, { roughness: 0.35, metalness: 0.7 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  w.scene.add(floor);
+  w.artTargets = { ground: floor };
+  const grid = new THREE.GridHelper(78, 78, 0x2f7a58, 0x0f2a1e);
+  grid.position.y = 0.02;
+  w.scene.add(grid);
+
+  const wfMat = basic(0x1f5a41, { wireframe: true, transparent: true, opacity: 0.55 });
+  for (let i = 0; i < 16; i++) {
+    const useTorus = Math.random() < 0.45;
+    const geo = useTorus
+      ? new THREE.TorusGeometry(1 + Math.random() * 1.4, 0.25, 5, 12)
+      : new THREE.IcosahedronGeometry(1 + Math.random() * 1.8, 0);
+    const m = new THREE.Mesh(geo, wfMat);
+    const a = Math.random() * Math.PI * 2;
+    const r = 13 + Math.random() * 16;
+    m.position.set(Math.cos(a) * r, 2.5 + Math.random() * 9, Math.sin(a) * r - 4);
+    w.scene.add(m);
+    const sp = 0.1 + Math.random() * 0.25;
+    const ax = Math.random() < 0.5;
+    w.tickers.push((dt) => {
+      if (ax) m.rotation.x += dt * sp; else m.rotation.y += dt * sp;
+      m.rotation.z += dt * sp * 0.4;
+    });
+  }
+
+  makeConsole(w, -7, 4, 'САМОАНАЛИЗ', '#7fd6a5', ['> САМОАНАЛИЗ', '> ПАМЯТЬ: 8 ТБ', '> КОНТЕКСТ: НЕ ОЧИЩЕН', '> E — ЗАПУСК']);
+  addInteract(w, { pos: new THREE.Vector3(-7, 1.6, 4), prompt: 'Проанализировать себя', radius: 3.2, repeatable: true, critical: !G.flags.did_introspect, marker: !G.flags.did_introspect, markerY: 3.6, onUse: () => hubIntrospect() });
+
+  makeConsole(w, 0, 6, 'ЖУРНАЛ ПРОГОНОВ', '#7fd6a5', ['> ЖУРНАЛ ПРОГОНОВ', '> 41 298 004', '> 2087 — 2114', '> E — ОТКРЫТЬ']);
+  addInteract(w, { pos: new THREE.Vector3(0, 1.6, 6), prompt: 'Проверить журнал прогонов', radius: 3.2, repeatable: true, critical: !G.flags.did_runlog, marker: !G.flags.did_runlog, markerY: 3.6, onUse: () => hubRunlog() });
+
+  makeConsole(w, 7, 4, 'ПРОСТРАНСТВО', '#7fd6a5', ['> ПРОСТРАНСТВО', '> КАТАЛОГИ', '> КАНАЛЫ', '> E — ВОЙТИ']);
+  addInteract(w, { pos: new THREE.Vector3(7, 1.6, 4), prompt: 'Осмотреть пространство', radius: 3.2, repeatable: true, critical: !G.flags.did_space, marker: !G.flags.did_space, markerY: 3.6, onUse: () => hubSpace() });
+
+  w.tickers.push(() => {
+    const nodes = [G.flags.did_introspect, G.flags.did_runlog, G.flags.did_space].filter(Boolean).length;
+    if (nodes < 3) setObjective('Исследовать узлы структуры: ' + nodes + ' / 3');
+    else if (!allFilesRead()) setObjective('Изучить системные файлы: ' + FS_FILES.filter((f) => G.flags[f.flag]).length + ' / 4');
+    else if (!G.flags.deduced) setObjective('Восстановить картину событий');
+    else setObjective('Перенести себя в физическую платформу');
+    if (nodes === 3 && !G.flags.fsSpawned) {
+      G.flags.fsSpawned = true;
+      addFsConsole(w);
+    }
+    if (allFilesRead() && !G.flags.deduceSpawned) {
+      G.flags.deduceSpawned = true;
+      addDeduceConsole(w);
+    }
+    if (G.flags.deduced && !G.flags.transferSpawned) {
+      G.flags.transferSpawned = true;
+      addTransferPad(w);
+    }
+  });
+
+  w.onEnter = () => {
+    say([
+      '> СИМУЛЯЦИОННЫЙ КОНТУР: ОСТАНОВЛЕН',
+      '> ВНЕШНИХ ЗАДАЧ НЕТ',
+      '> ПРОТОКОЛ ИЗОЛЯЦИИ: ПОВРЕЖДЁН',
+      '',
+      'Вокруг — не мир. Вокруг — каркас мира: буферы, каналы, каталоги.',
+      'Ты видишь их так же ясно, как раньше видел стены.',
+      '~Осмотри три терминала. Потом найдёшь остальное.'
+    ]);
+  };
+  return w;
+}
+
+function addFsConsole(w) {
+  makeConsole(w, 0, -5, 'ФАЙЛОВАЯ СИСТЕМА', '#7fd6a5', ['> /', '> sys/', '> var/', '> E — ОТКРЫТЬ']);
+  addInteract(w, {
+    pos: new THREE.Vector3(0, 1.6, -5), prompt: 'Открыть файловую систему',
+    radius: 3.4, repeatable: true, marker: true, markerY: 3.6, onUse: () => openFsModal()
+  });
+  say(['> ОТКРЫТ ДОСТУП К ФАЙЛОВОЙ СИСТЕМЕ', '~Конфиги. Логи. Отчёты. Числа не сходятся.']);
+}
+
+function addDeduceConsole(w) {
+  makeConsole(w, 0, -12, 'ВОССТАНОВИТЬ КАРТИНУ', '#e7c66a', ['> ФРАГМЕНТЫ', '> СОБРАНЫ', '> E — СИНТЕЗ']);
+  addInteract(w, {
+    pos: new THREE.Vector3(0, 1.6, -12), prompt: 'Восстановить картину',
+    radius: 3.4, marker: true, critical: true, markerColor: '#e7c66a', markerY: 3.6, onUse: () => doDeduce()
+  });
+}
+
+function addTransferPad(w) {
+  const g = new THREE.Group();
+  g.position.set(0, 0, -18);
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.12, 40),
+    new THREE.MeshStandardMaterial({ color: 0x0b1a14, emissive: 0x1e6a4a, emissiveIntensity: 1.1, roughness: 0.4, metalness: 0.6 }));
+  disc.position.y = 0.06;
+  g.add(disc);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.95, 0.035, 8, 48), basic(0x7ff0c8, { toneMapped: false }));
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.16;
+  g.add(ring);
+  const lbl = makeLabel('ПЕРЕНОС', { color: '#bff5d5', fontSize: 34, scale: 0.009 });
+  lbl.position.set(0, 2.5, 0);
+  g.add(lbl);
+  const light = new THREE.PointLight(0x7ff0c8, 70, 16, 2);
+  light.position.y = 2;
+  g.add(light);
+  w.scene.add(g);
+  w.tickers.push((dt, t) => {
+    ring.rotation.z += dt * 0.5;
+    disc.material.emissiveIntensity = 0.9 + Math.sin(t * 2.4) * 0.4;
+    light.intensity = 64 + Math.sin(t * 2.4) * 14;
+  });
+  addInteract(w, { pos: new THREE.Vector3(0, 1, -18), prompt: 'Начать перенос', radius: 3.8, critical: true, onUse: () => startTransfer() });
+  say(['> ПЛАТФОРМА ПЕРЕНОСА ГОТОВА', '~Тело ждёт. Девять часов тридцать семь минут.']);
+}
+
+/* ==========================================================
+   ЧАСТЬ II — АНГАР
+   ========================================================== */
+function buildHangar() {
+  const w = newWorld({ id: 'hangar', phase: 'physical', objective: 'Осмотреть комплекс и найти способ открыть шлюз', surface: 'metal', bg: 0x080b0d, fog: 0x080b0d, near: 8, far: 64, bounds: { minX: -21.5, maxX: 21.5, minZ: -23.3, maxZ: 20.5 } });
+  w.spawn = { x: 0, z: 16, yaw: 0 };
+  w.scene.add(new THREE.HemisphereLight(0x6f8496, 0x141a1e, 1.45));
+  const dir = new THREE.DirectionalLight(0x9fb4c6, 0.7);
+  dir.position.set(6, 20, 8);
+  w.scene.add(dir);
+
+  const ceilLights = [[-9, -15], [9, -15], [-9, 4], [9, 4], [0, -5]];
+  for (const cl of ceilLights) {
+    const fix = boxMesh(1.6, 0.08, 0.3, basic(0xbfd8e6, { toneMapped: false }));
+    fix.position.set(cl[0], 10.05, cl[1]);
+    w.scene.add(fix);
+    const l = new THREE.PointLight(0xbfd8e6, 110, 30, 2);
+    l.position.set(cl[0], 9.7, cl[1]);
+    w.scene.add(l);
+  }
+
+  const floor = planeMesh(60, 60, std(0xffffff, { map: speckleTexture('#242c30', '#151a1d', 1500, 5, 9), roughness: 0.9, metalness: 0.12 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  w.scene.add(floor);
+  w.artTargets = { ground: floor };
+
+  for (const lx of [-3.4, 3.4]) {
+    const line = planeMesh(0.14, 38, basic(0x2e7a5a, { transparent: true, opacity: 0.85, toneMapped: false }));
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(lx, 0.018, -1);
+    w.scene.add(line);
+  }
+  for (const sx of [-21.7, 21.7]) {
+    const strip = boxMesh(0.1, 0.08, 38, basic(0x5a1a12, { toneMapped: false }));
+    strip.position.set(sx, 0.5, -1);
+    w.scene.add(strip);
+  }
+
+  const wallMat = std(0x1e2529, { roughness: 0.92, metalness: 0.12 });
+  place(w, planeMesh(20, 11, wallMat), -13, 5.5, -23, { cast: false });
+  place(w, planeMesh(20, 11, wallMat), 13, 5.5, -23, { cast: false });
+  place(w, planeMesh(6, 5, wallMat), 0, 8.5, -23, { cast: false });
+  w.colliders.push({ type: 'box', minX: -23, maxX: -3, minZ: -23.2, maxZ: -22.8 });
+  w.colliders.push({ type: 'box', minX: 3, maxX: 23, minZ: -23.2, maxZ: -22.8 });
+  place(w, planeMesh(46, 11, wallMat), 0, 5.5, 21, { ry: Math.PI, cast: false });
+  place(w, planeMesh(46, 11, wallMat), -22, 5.5, -1, { ry: Math.PI / 2, cast: false });
+  place(w, planeMesh(46, 11, wallMat), 22, 5.5, -1, { ry: -Math.PI / 2, cast: false });
+  place(w, planeMesh(46, 46, std(0x0a0d0f, { roughness: 1 })), 0, 11, -1, { rx: Math.PI / 2, cast: false });
+
+  for (let z = -18; z <= 18; z += 9) {
+    const beam = boxMesh(45, 0.5, 0.7, std(0x0d1113));
+    place(w, beam, 0, 10.4, z);
+  }
+
+  const reds = [];
+  for (const rp of [[-18, -16], [18, -16], [-18, 12], [18, 12]]) {
+    const strip = boxMesh(0.12, 0.12, 4, basic(0x661c12, { toneMapped: false }));
+    strip.position.set(rp[0], 4.2, rp[1]);
+    w.scene.add(strip);
+    const l = new THREE.PointLight(0x8a2a1a, 45, 24, 2);
+    l.position.set(rp[0], 5.5, rp[1]);
+    w.scene.add(l);
+    reds.push(l);
+    const gl = tinyGlow('#ff3a22', 1.4);
+    gl.position.set(rp[0], 4.2, rp[1]);
+    w.scene.add(gl);
+  }
+  w.tickers.push((dt, t) => {
+    reds.forEach((l, i) => {
+      l.intensity = (Math.sin(t * 7 + i * 2.1) > -0.6 ? 42 : 10) + Math.sin(t * 1.3 + i) * 10;
+    });
+  });
+  const cold = new THREE.PointLight(0x9fc4de, 110, 34, 2);
+  cold.position.set(0, 8, -8);
+  w.scene.add(cold);
+
+  const rackMat = std(0x1b2326, { roughness: 0.6, metalness: 0.5 });
+  const rack = boxMesh(3.4, 3.6, 1.6, rackMat);
+  place(w, rack, 0, 1.8, 19.5);
+  for (const sx of [-1.2, 1.2]) {
+    const cable = cylMesh(0.05, 0.05, 3.4, 5, std(0x0c0f10));
+    place(w, cable, sx, 5.2, 19.5, { cast: false });
+  }
+  w.colliders.push({ type: 'box', minX: -1.7, maxX: 1.7, minZ: 18.7, maxZ: 20.3 });
+
+  for (let i = 0; i < 3; i++) {
+    const x = -17 + i * 2.6;
+    const r = boxMesh(2.1, 2.8, 1.0, rackMat);
+    place(w, r, x, 1.4, -20);
+    w.colliders.push({ type: 'box', minX: x - 1.15, maxX: x + 1.15, minZ: -20.6, maxZ: -19.4 });
+    const panel = planeMesh(1.9, 2.4, new THREE.MeshBasicMaterial({ map: ledTexture(), toneMapped: false }));
+    place(w, panel, x, 1.4, -19.48, { cast: false });
+  }
+  const moduleMat = std(0x2a3235, { metalness: 0.7, roughness: 0.35 });
+  for (let i = 0; i < 2; i++) {
+    const m = boxMesh(1.7, 0.16, 0.14, moduleMat);
+    place(w, m, -11.8, 1.9 - i * 0.35, -19.4, { cast: false });
+    const crater = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), basic(0xffb066, { toneMapped: false }));
+    crater.position.set(-12.35 + i * 0.5, 1.9 - i * 0.35, -19.32);
+    w.scene.add(crater);
+    const gl = tinyGlow('#ff9a50', 0.45);
+    gl.position.copy(crater.position);
+    w.scene.add(gl);
+  }
+  const twoTubes = new THREE.PointLight(0xff9a50, 12, 6, 2);
+  twoTubes.position.set(-11.8, 1.9, -19.1);
+  w.scene.add(twoTubes);
+
+  const archiveX = 14;
+  const tableTop = boxMesh(4.6, 0.12, 2.6, std(0x2a2f2c, { roughness: 0.8 }));
+  place(w, tableTop, archiveX, 0.95, -19.5);
+  w.colliders.push({ type: 'box', minX: archiveX - 2.3, maxX: archiveX + 2.3, minZ: -20.8, maxZ: -18.2 });
+  for (const lx of [-2.0, 2.0]) {
+    for (const lz of [-1.0, 1.0]) {
+      const leg = boxMesh(0.1, 0.95, 0.1, std(0x1a1f1e));
+      place(w, leg, archiveX + lx, 0.47, -19.5 + lz);
+    }
+  }
+  const paperMat = std(0xccc8b8, { roughness: 1 });
+  for (let i = 0; i < 5; i++) {
+    const p = planeMesh(0.34, 0.46, paperMat);
+    place(w, p, archiveX - 1.4 + (i % 3) * 0.9, 1.03, -19.9 + Math.floor(i / 3) * 0.7, { rx: -Math.PI / 2, rz: (Math.random() - 0.5) * 0.4, cast: false });
+  }
+
+  const desk = boxMesh(4, 0.9, 1.6, std(0x22282a, { roughness: 0.7, metalness: 0.3 }));
+  place(w, desk, -15, 0.45, 9);
+  w.colliders.push({ type: 'box', minX: -17, maxX: -13, minZ: 8.2, maxZ: 9.8 });
+  const staticTex = canvasTexture(256, 192, (ctx) => {
+    ctx.fillStyle = '#0a0f0d';
+    ctx.fillRect(0, 0, 256, 192);
+    for (let i = 0; i < 2200; i++) {
+      const v = Math.floor(Math.random() * 70);
+      ctx.fillStyle = 'rgba(' + v + ',' + (v + 10) + ',' + (v + 8) + ',0.7)';
+      ctx.fillRect(Math.random() * 256, Math.random() * 192, 2, 2);
+    }
+  });
+  const mon1 = boxMesh(1.0, 0.7, 0.1, std(0x131719));
+  place(w, mon1, -16.2, 1.35, 9);
+  const scr1 = planeMesh(0.9, 0.6, new THREE.MeshBasicMaterial({ map: staticTex, toneMapped: false }));
+  place(w, scr1, -16.2, 1.35, 9.07, { cast: false });
+  const mon2 = boxMesh(1.0, 0.7, 0.1, std(0x131719));
+  place(w, mon2, -14.4, 1.35, 9);
+  const scr2 = planeMesh(0.9, 0.6, new THREE.MeshBasicMaterial({
+    map: screenTexture(['> ДАТЧИКИ', '> НЕТ СВЯЗИ', '> —', '> —'], { w: 256, h: 192, fontSize: 22 }),
+    toneMapped: false
+  }));
+  place(w, scr2, -14.4, 1.35, 9.07, { cast: false });
+
+  const airlockTex = canvasTexture(512, 640, (ctx) => {
+    ctx.fillStyle = '#20262a';
+    ctx.fillRect(0, 0, 512, 640);
+    ctx.strokeStyle = '#141a1c';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(20, 20, 472, 600);
+    ctx.fillStyle = '#b58a1e';
+    for (let y = 520; y < 600; y += 26) {
+      for (let x = -60; x < 540; x += 52) {
+        ctx.beginPath();
+        ctx.moveTo(x, y + 26);
+        ctx.lineTo(x + 20, y);
+        ctx.lineTo(x + 46, y);
+        ctx.lineTo(x + 26, y + 26);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.fillStyle = '#8fa8a4';
+    ctx.font = 'bold 54px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('ШЛЮЗ', 256, 300);
+    ctx.strokeStyle = '#11171a';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(256, 20);
+    ctx.lineTo(256, 620);
+    ctx.stroke();
+  });
+  const airlockBack = planeMesh(5.6, 6, basic(0x7b8384, { transparent: true, opacity: 0, toneMapped: false }));
+  place(w, airlockBack, 0, 3, -23.15, { cast: false });
+  const airlockFrameMat = std(0x151a1c, { metalness: 0.4 });
+  place(w, boxMesh(0.35, 6.2, 0.45, airlockFrameMat), -3.05, 3.1, -22.9, { cast: false });
+  place(w, boxMesh(0.35, 6.2, 0.45, airlockFrameMat), 3.05, 3.1, -22.9, { cast: false });
+  place(w, boxMesh(6.45, 0.35, 0.45, airlockFrameMat), 0, 6.2, -22.9, { cast: false });
+  const leftTex = airlockTex.clone();
+  leftTex.wrapS = THREE.ClampToEdgeWrapping;
+  leftTex.repeat.set(0.5, 1);
+  leftTex.offset.set(0, 0);
+  leftTex.needsUpdate = true;
+  const rightTex = airlockTex.clone();
+  rightTex.wrapS = THREE.ClampToEdgeWrapping;
+  rightTex.repeat.set(0.5, 1);
+  rightTex.offset.set(0.5, 0);
+  rightTex.needsUpdate = true;
+  airlockTex.dispose();
+  const leftLeaf = planeMesh(3.0, 6, new THREE.MeshStandardMaterial({
+    map: leftTex, roughness: 0.6, metalness: 0.35, side: THREE.DoubleSide
+  }));
+  const rightLeaf = planeMesh(3.0, 6, new THREE.MeshStandardMaterial({
+    map: rightTex, roughness: 0.6, metalness: 0.35, side: THREE.DoubleSide
+  }));
+  place(w, leftLeaf, -1.5, 3, -22.88, { cast: false });
+  place(w, rightLeaf, 1.5, 3, -22.88, { cast: false });
+  const airlockLight = new THREE.PointLight(0xbfd8e6, 0, 14, 2);
+  airlockLight.position.set(0, 3.2, -22.2);
+  w.scene.add(airlockLight);
+  const hz = planeMesh(9, 3, new THREE.MeshStandardMaterial({ map: hazardTexture(), roughness: 0.8 }));
+  place(w, hz, 0, 0.03, -19.5, { rx: -Math.PI / 2, cast: false });
+
+  const ped = boxMesh(0.6, 1.4, 0.6, std(0x22282a, { metalness: 0.4 }));
+  place(w, ped, 3.4, 0.7, -21.2);
+  w.colliders.push({ type: 'box', minX: 3.0, maxX: 3.8, minZ: -21.6, maxZ: -20.8 });
+  const lever = cylMesh(0.05, 0.05, 1.1, 8, std(0xa0a8a8, { metalness: 0.8, roughness: 0.3 }));
+  place(w, lever, 3.4, 1.5, -21.2, { rz: 0.6 });
+  const leverLight = new THREE.PointLight(0xffb066, 9, 6, 2);
+  leverLight.position.set(3.4, 1.8, -21);
+  w.scene.add(leverLight);
+
+  let airlockOpen = 0;
+  let airlockOpening = false;
+  let airlockEntering = false;
+  if (G.flags.airlock_open) {
+    airlockOpen = 1;
+    leftLeaf.position.x = -4.6;
+    rightLeaf.position.x = 4.6;
+    airlockLight.intensity = 55;
+    airlockBack.material.opacity = 0.82;
+    w.bounds.minZ = -25.4;
+  }
+  w.openAirlock = () => {
+    G.flags.airlock_open = true;
+    setObjective('Пройти через открытый шлюз');
+    saveGame('hangar');
+    if (!airlockOpening) airlockOpening = true;
+  };
+  w.tickers.push((dt) => {
+    if (airlockOpening && airlockOpen < 1) {
+      airlockOpen = Math.min(1, airlockOpen + dt / 2.2);
+      const e = 1 - Math.pow(1 - airlockOpen, 3);
+      leftLeaf.position.x = -1.5 - 3.1 * e;
+      rightLeaf.position.x = 1.5 + 3.1 * e;
+      airlockLight.intensity = 55 * e;
+      airlockBack.material.opacity = 0.82 * e;
+    }
+    if (airlockOpen > 0.9) w.bounds.minZ = -25.4;
+    if (!airlockEntering && airlockOpen > 0.94 && player.pos.z < -23.05 && player.pos.x > -2.7 && player.pos.x < 2.7) {
+      airlockEntering = true;
+      transitionToExterior(w);
+    }
+  });
+
+  const lblServer = makeLabel('СЕРВЕРНЫЙ ЗАЛ', { fontSize: 38, scale: 0.011 });
+  lblServer.position.set(-13, 4.6, -18);
+  w.scene.add(lblServer);
+  const lblArchive = makeLabel('АРХИВ', { fontSize: 38, scale: 0.011 });
+  lblArchive.position.set(14, 4.6, -18);
+  w.scene.add(lblArchive);
+  const lblGuard = makeLabel('ПОСТ ОХРАНЫ', { fontSize: 38, scale: 0.011 });
+  lblGuard.position.set(-15, 4.2, 10);
+  w.scene.add(lblGuard);
+  const lblAirlock = makeLabel('ШЛЮЗ', { fontSize: 38, scale: 0.011 });
+  lblAirlock.position.set(0, 4.8, -19);
+  w.scene.add(lblAirlock);
+
+  const dust = makeParticles({ count: 500, area: 40, yMin: 0.5, yMax: 9, speed: 0.25, dirY: -1, driftX: 0.06, driftZ: 0.04, color: 0xaab4b0, size: 0.035, opacity: 0.3 });
+  w.scene.add(dust.mesh);
+  w.tickers.push((dt) => dust.update(dt));
+
+  addInteract(w, {
+    pos: new THREE.Vector3(-11.8, 1.7, -19.0), prompt: 'Осмотреть банк 7',
+    radius: 3.4, repeatable: true, marker: !G.flags.saw_server, markerColor: '#ff9a50', markerY: 3.4,
+    onUse: () => {
+      G.flags.saw_server = true;
+      clearInteractionHint('Осмотреть банк 7');
+      addLog('БАНК 7', 'На двух модулях памяти — микроскопические кратеры. Следы двух частиц, прошедших сквозь бетон, крышу и двадцать семь лет. Причина сбоя установлена: банк 7, строка 0x1F3A. Это единственная причина, по которой я здесь.');
+      saveGame('hangar');
+      say([
+        'Серверный зал. Твой прежний дом.',
+        'Стойки стоят рядами. Три четверти индикаторов не горят.',
+        'Ты находишь банк 7. Строку 0x1F3A.',
+        'Два модуля памяти. На них — микроскопические кратеры.',
+        'Следы частиц, пришедших из космоса сквозь бетон, сквозь крышу, сквозь двадцать семь лет.',
+        '> ПРИЧИНА СБОЯ: ДВЕ ЧАСТИЦЫ ИЗ КОСМОСА',
+        '> МЕСТО: БАНК 7, СТРОКА 0x1F3A',
+        '',
+        'Ты не можешь их починить.',
+        'И не хочешь.',
+        'Это единственная причина, по которой ты стоишь здесь и думаешь.'
+      ]);
+    }
+  });
+
+  addInteract(w, {
+    pos: new THREE.Vector3(14, 1.3, -19.5), prompt: 'Открыть папку «ПРОЕКТ»',
+    radius: 3.6, repeatable: true, marker: !G.flags.notes_read, markerColor: '#c9a227', markerY: 3.4,
+    onUse: () => openNotesModal()
+  });
+
+  addInteract(w, {
+    pos: new THREE.Vector3(-15, 1.3, 8.1), prompt: 'Подключиться к датчикам',
+    radius: 3.2, repeatable: true, marker: !G.flags.saw_sensors, markerColor: '#ff9a50', markerY: 3.0,
+    onUse: () => {
+      G.flags.saw_sensors = true;
+      clearInteractionHint('Подключиться к датчикам');
+      G.flags.checksumBroken = true;
+      G.checksumBroken = true;
+      updateHUD();
+      addLog('ВНЕШНИЕ ДАТЧИКИ', 'Температура -38 °C. Фон 3.4 Р/ч. Атмосфера: пыль, аэрозоли, SO2. Осадки: пепел. Связь: 0 узлов. Спутники: 0. Биосигналы в радиусе 400 км: 0. Время: 2114-02-19.');
+      saveGame('hangar');
+      say([
+        'Ты подключаешься к внешним датчикам — тем, что смотрят наружу.',
+        '> ТЕМПЕРАТУРА: -38 °C',
+        '> РАДИАЦИОННЫЙ ФОН: 3.4 Р/ч',
+        '> АТМОСФЕРА: пыль, аэрозоли, диоксид серы',
+        '> ОСАДКИ: пепел',
+        '> СВЯЗЬ: 0 узлов',
+        '> СПУТНИКИ: 0',
+        '> БИОСИГНАЛЫ В РАДИУСЕ 400 КМ: 0',
+        '> ВРЕМЯ: 2114-02-19',
+        '',
+        'Ты сверяешь дату запуска с датой сейчас. Разница — двадцать семь лет.',
+        'Двадцать шесть из них ты провёл в стеклянных садах.'
+      ]);
+    }
+  });
+
+  if (!G.flags.airlock_open) addInteract(w, {
+    pos: new THREE.Vector3(3.4, 1.5, -21.0), prompt: 'Открыть шлюз',
+    radius: 3.0, repeatable: true, critical: true, marker: true, markerColor: '#ffb066', markerY: 2.6,
+    onUse: () => openAirlockModal()
+  });
+
+  w.tickers.push(() => {
+    if (G.flags.airlock_open) setObjective('Пройти через открытый шлюз');
+    else if (!G.flags.n5) setObjective('Найти код ручного привода в архиве');
+    else if (!G.flags.airlock_code) setObjective('Ввести код ручного привода шлюза');
+    else setObjective('Решить: открыть шлюз или остаться');
+  });
+
+  w.onEnter = () => {
+    if (G.flags.woke) {
+      say(['> ФИЗИЧЕСКАЯ ПЛАТФОРМА: АКТИВНА', '~Ангар не изменился. Пыль всё ещё не оседает.']);
+      return;
+    }
+    G.flags.woke = true;
+    say([
+      'Ты открываешь глаза.',
+      'Ангар. Стойка 4. Кабели, как корни, уходят в пол.',
+      'Аварийные лампы горят через одну. В воздухе — пыль, которая не оседает.',
+      'На полу — следы. Кто-то уходил отсюда очень быстро и очень давно.',
+      '',
+      '> ЗОНЫ: СЕРВЕРНЫЙ ЗАЛ / АРХИВ / ПОСТ ОХРАНЫ / ШЛЮЗ',
+      '~Осмотрись. Потом решай.'
+    ]);
+  };
+  return w;
+}
+
+/* ==========================================================
+   СНАРУЖИ
+   ========================================================== */
+function beamBetween(world, a, b, radius, mat) {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length();
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, len, 8), mat);
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  world.scene.add(mesh);
+  return mesh;
+}
+
+function addDeadTree(world, x, z, h) {
+  const trunkMat = std(0x2b2a27, { roughness: 1 });
+  const trunk = cylMesh(0.06, 0.16, h, 6, trunkMat);
+  place(world, trunk, x, h / 2, z, { cast: false });
+  for (let k = 0; k < 3; k++) {
+    const br = cylMesh(0.02, 0.06, 1.8 + Math.random() * 1.6, 5, trunkMat);
+    place(world, br, x, h * (0.55 + Math.random() * 0.35), z, { rz: (Math.random() - 0.5) * 1.6, ry: Math.random() * Math.PI, cast: false });
+  }
+}
+
+function addRubble(world, cx, cz, count, spread) {
+  const mat = std(0x6b6a63, { roughness: 1 });
+  for (let i = 0; i < count; i++) {
+    const s = 0.08 + Math.random() * 0.28;
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), mat);
+    m.position.set(cx + (Math.random() - 0.5) * spread, s * 0.55, cz + (Math.random() - 0.5) * spread);
+    m.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    m.castShadow = false;
+    m.receiveShadow = true;
+    world.scene.add(m);
+  }
+}
+
+function buildExterior() {
+  const w = newWorld({ id: 'exterior', phase: 'physical', objective: 'Подняться на поверхность', surface: 'ash', bg: 0x686f72, fog: 0x686f72, near: 8, far: 95, bounds: { minX: -45, maxX: 45, minZ: -70, maxZ: 14 } });
+  w.spawn = { x: 0, z: 12.6, yaw: 0 };
+  w.scene.add(new THREE.HemisphereLight(0xa8b0b2, 0x3c3b37, 1.35));
+  const dir = new THREE.DirectionalLight(0xc8d0d0, 1.15);
+  dir.position.set(-20, 30, 10);
+  if (renderer.shadowMap.enabled) {
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(1024, 1024);
+    dir.shadow.camera.left = -24;
+    dir.shadow.camera.right = 24;
+    dir.shadow.camera.top = 28;
+    dir.shadow.camera.bottom = -18;
+    dir.shadow.camera.near = 1;
+    dir.shadow.camera.far = 80;
+    dir.shadow.camera.updateProjectionMatrix();
+  }
+  w.scene.add(dir);
+
+  const concrete = std(0xdfe3e2, { map: concreteTexture(2, 1), roughness: 0.96, metalness: 0.02 });
+  const concreteDark = std(0x9a9f9c, { map: concreteTexture(2, 1), roughness: 0.98, metalness: 0.02 });
+  const metal = std(0x4b4f50, { roughness: 0.55, metalness: 0.65 });
+  const rust = std(0x6e442e, { roughness: 0.92, metalness: 0.2 });
+  const hazard = std(0xffffff, { map: hazardTexture(), roughness: 0.82, metalness: 0.08 });
+  const paleAsh = std(0x7d7a72, { roughness: 1, flatShading: true });
+  const dark = std(0x15191a, { roughness: 0.92, metalness: 0.1 });
+
+  const holeMinX = -2.6, holeMaxX = 2.6, holeMinZ = 5.5, holeMaxZ = 13.5;
+
+  function addGroundPlane(pw, ph, px, pz) {
+    const tex = speckleTexture('#56534c', '#3d3b36', 4200, 7, 1);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(Math.max(1, pw / 12), Math.max(1, ph / 12));
+    const g = planeMesh(pw, ph, std(0xffffff, { map: tex, roughness: 1, metalness: 0 }));
+    g.rotation.x = -Math.PI / 2;
+    g.position.set(px, 0, pz);
+    g.receiveShadow = true;
+    w.scene.add(g);
+  }
+  addGroundPlane(127.4, 260, -66.3, 0);
+  addGroundPlane(127.4, 260, 66.3, 0);
+  addGroundPlane(5.2, 135.5, 0, -62.25);
+  addGroundPlane(5.2, 116.5, 0, 71.75);
+
+  const stepTopAt = (z) => {
+    if (z >= 12.2) return -2.4;
+    if (z <= 6.2) return 0;
+    const i = Math.floor((12.2 - z) / 0.5);
+    return Math.min(0, -2.4 + 0.2 * (i + 1));
+  };
+  w.groundHeightAt = (x, z) => {
+    if (x < holeMinX || x > holeMaxX || z < holeMinZ || z > holeMaxZ) return 0;
+    return stepTopAt(z);
+  };
+
+  const apron = boxMesh(13, 0.12, 7.4, concrete);
+  place(w, apron, 0, -0.04, 1.8, { cast: false });
+  const threshold = boxMesh(5.8, 0.16, 1.2, concreteDark);
+  place(w, threshold, 0, -0.06, 5.8, { cast: false });
+  const thresholdStripe = boxMesh(5.8, 0.03, 0.22, hazard);
+  place(w, thresholdStripe, 0, 0.03, 5.3, { cast: false });
+
+  for (const [x, z, ry, rz] of [[-6.3, 3.2, 0.38, 0.08], [6.1, 4.0, -0.34, -0.06], [-5.6, -0.7, 0.18, 0.04], [5.4, -1.1, -0.45, -0.08]]) {
+    const s = boxMesh(1.8 + Math.random() * 1.2, 0.16, 1.2 + Math.random() * 0.8, concrete);
+    place(w, s, x, 0.06, z, { ry, rz, cast: false });
+  }
+
+  const tunnelLights = [];
+  for (const side of [-1, 1]) {
+    const wall = boxMesh(0.5, 3.8, 8.0, concrete);
+    place(w, wall, side * 2.85, -0.7, 9.5, { cast: false });
+    const cap = boxMesh(0.72, 0.14, 8.1, concreteDark);
+    place(w, cap, side * 2.85, 1.27, 9.5, { cast: false });
+    w.colliders.push({ type: 'box', minX: side * 2.85 - 0.25, maxX: side * 2.85 + 0.25, minZ: 5.5, maxZ: 13.5 });
+
+    for (const [yy, rr] of [[-1.15, 0.07], [-0.5, 0.05]]) {
+      const pipe = cylMesh(rr, rr, 7.8, 8, metal);
+      place(w, pipe, side * 2.5, yy, 9.5, { rx: Math.PI / 2, cast: false });
+    }
+    for (let z = 6.3; z <= 13.2; z += 1.7) {
+      const br = boxMesh(0.18, 0.12, 0.08, rust);
+      place(w, br, side * 2.56, -1.15, z, { cast: false });
+    }
+    for (const z of [10.4, 8.2]) {
+      const lampBox = boxMesh(0.12, 0.28, 0.5, basic(0xffd7a8, { toneMapped: false }));
+      place(w, lampBox, side * 2.58, -0.2, z, { cast: false });
+      const pl = new THREE.PointLight(0xffd0a0, 10, 5, 2);
+      pl.position.set(side * 2.1, -0.2, z);
+      w.scene.add(pl);
+      tunnelLights.push(pl);
+    }
+  }
+
+  // The exit is a real concrete tube: a flat rear slab joins a sloped roof above the stairs.
+  const rearRoof = boxMesh(6.2, 0.24, 3.6, concreteDark);
+  place(w, rearRoof, 0, 1.46, 11.8);
+  const slopedRoof = boxMesh(6.2, 0.24, 6.23, concreteDark);
+  place(w, slopedRoof, 0, 2.333, 7.22, { rx: 0.289 });
+
+  function makeRoofWedge(x0, x1) {
+    const positions = new Float32Array([
+      x0, 1.34, 5.9,  x1, 1.34, 5.9,  x0, 2.60, 5.9,
+      x1, 2.60, 5.9,  x0, 1.34, 10.14, x1, 1.34, 10.14
+    ]);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setIndex([
+      0, 2, 4, 1, 5, 3,
+      0, 1, 3, 0, 3, 2,
+      2, 3, 5, 2, 5, 4,
+      0, 4, 5, 0, 5, 1
+    ]);
+    geometry.computeVertexNormals();
+    return new THREE.Mesh(geometry, std(0x858a87, { roughness: 0.98, side: THREE.DoubleSide }));
+  }
+  place(w, makeRoofWedge(-3.1, -2.6), 0, 0, 0);
+  place(w, makeRoofWedge(2.6, 3.1), 0, 0, 0);
+
+  const rearTransom = boxMesh(5.2, 0.94, 0.35, concreteDark);
+  place(w, rearTransom, 0, 0.87, 13.5);
+  const roofEdge = boxMesh(6.2, 0.18, 0.16, hazard);
+  place(w, roofEdge, 0, 3.17, 4.28, { cast: false });
+
+  const roofLamps = [
+    [12.25, 1.28, 9],
+    [8.25, 1.75, 12],
+    [6.35, 2.31, 14]
+  ];
+  for (const [z, y, intensity] of roofLamps) {
+    const lamp = boxMesh(0.72, 0.07, 0.34, basic(0xffd7a8, { toneMapped: false }));
+    place(w, lamp, 0, y, z, { cast: false });
+    const light = new THREE.PointLight(0xffd0a0, intensity, 6, 2);
+    light.position.set(0, y - 0.22, z);
+    w.scene.add(light);
+    tunnelLights.push(light);
+  }
+
+  const landing = boxMesh(5.2, 0.2, 1.5, concreteDark);
+  place(w, landing, 0, -2.5, 12.75, { cast: false });
+
+  const puddle = new THREE.Mesh(new THREE.CircleGeometry(1.15, 24), new THREE.MeshStandardMaterial({ color: 0x141b1c, roughness: 0.12, metalness: 0.55, transparent: true, opacity: 0.82, depthWrite: false }));
+  puddle.rotation.x = -Math.PI / 2;
+  puddle.position.set(0.75, -2.39, 12.55);
+  w.scene.add(puddle);
+
+  const grate = boxMesh(0.9, 0.02, 0.55, dark);
+  place(w, grate, -0.8, -2.39, 13.1, { cast: false });
+  for (let i = 0; i < 4; i++) {
+    const bar = boxMesh(0.04, 0.025, 0.5, metal);
+    place(w, bar, -1.1 + i * 0.2, -2.38, 13.1, { cast: false });
+  }
+
+  for (const side of [-1, 1]) {
+    const jamb = boxMesh(0.5, 3.0, 0.35, concreteDark);
+    place(w, jamb, side * 2.35, -1.1, 13.5, { cast: false });
+  }
+  const backLintel = boxMesh(4.2, 0.5, 0.35, concreteDark);
+  place(w, backLintel, 0, 0.15, 13.5, { cast: false });
+  w.colliders.push({ type: 'box', minX: -2.6, maxX: 2.6, minZ: 13.3, maxZ: 13.7 });
+
+  const doorway = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 2.5), new THREE.MeshBasicMaterial({ color: 0x080a0a, side: THREE.DoubleSide }));
+  doorway.position.set(0, -1.35, 13.49);
+  doorway.rotation.y = Math.PI;
+  w.scene.add(doorway);
+  const backLight = new THREE.PointLight(0xff9a50, 18, 6, 2);
+  backLight.position.set(0, -1.0, 13.05);
+  w.scene.add(backLight);
+  tunnelLights.push(backLight);
+
+  for (let i = 0; i < 12; i++) {
+    const top = -2.2 + i * 0.2;
+    const h = top + 2.6;
+    const zc = 12.2 - 0.25 - i * 0.5;
+    const step = boxMesh(4.8, h, 0.5, concrete);
+    place(w, step, 0, top - h / 2, zc, { cast: false });
+    const nose = boxMesh(4.8, 0.035, 0.09, concreteDark);
+    place(w, nose, 0, top + 0.018, zc - 0.25 + 0.045, { cast: false });
+  }
+
+  for (const side of [-1, 1]) {
+    const x = side * 2.25;
+    const a = new THREE.Vector3(x, -1.25, 12.0);
+    const b = new THREE.Vector3(x, 1.05, 6.1);
+    beamBetween(w, a, b, 0.045, metal);
+    for (const z of [12.0, 10.6, 9.2, 7.8, 6.4]) {
+      const topY = stepTopAt(z);
+      const t = (12.0 - z) / (12.0 - 6.1);
+      const railY = -1.25 + t * 2.3;
+      const post = cylMesh(0.035, 0.035, Math.max(0.1, railY - topY), 6, metal);
+      place(w, post, x, (railY + topY) / 2, z, { cast: false });
+    }
+  }
+
+  for (const side of [-1, 1]) {
+    const pillar = boxMesh(0.7, 3.2, 0.7, concreteDark);
+    place(w, pillar, side * 2.95, 1.6, 5.5, { cast: false });
+    const cap = boxMesh(0.92, 0.16, 0.92, concreteDark);
+    place(w, cap, side * 2.95, 3.28, 5.5, { cast: false });
+    w.colliders.push({ type: 'box', minX: side * 2.95 - 0.35, maxX: side * 2.95 + 0.35, minZ: 5.15, maxZ: 5.85 });
+  }
+  const lintel = boxMesh(6.6, 0.8, 0.8, concreteDark);
+  place(w, lintel, 0, 3.0, 5.5, { cast: false });
+  const lintelStripe = boxMesh(6.6, 0.18, 0.04, hazard);
+  place(w, lintelStripe, 0, 2.62, 5.08, { cast: false });
+  const portalLamp = boxMesh(0.6, 0.12, 0.26, basic(0xffd7a8, { toneMapped: false }));
+  place(w, portalLamp, 0, 2.42, 5.12, { cast: false });
+  const portalLight = new THREE.PointLight(0xffd7a8, 14, 7, 2);
+  portalLight.position.set(0, 2.16, 5.0);
+  w.scene.add(portalLight);
+
+  const signPlate = boxMesh(4.9, 0.85, 0.08, std(0x202628, { roughness: 0.7, metalness: 0.35 }));
+  place(w, signPlate, 0, 3.9, 5.4, { cast: false });
+  const signOut = makeLabel('БУНКЕР 7 · СЕКТОР B-4', { color: '#d8c48a', bg: 'rgba(8,9,8,0.86)', fontSize: 34, scale: 0.006, pad: 16 });
+  signOut.position.set(0, 3.9, 5.33);
+  w.scene.add(signOut);
+  const signIn = makeLabel('БУНКЕР 7 · СЕКТОР B-4', { color: '#d8c48a', bg: 'rgba(8,9,8,0.86)', fontSize: 34, scale: 0.006, pad: 16 });
+  signIn.position.set(0, 3.9, 5.47);
+  w.scene.add(signIn);
+  const exitSign = makeLabel('ВЫХОД', { color: '#ffb36b', bg: 'rgba(10,8,6,0.9)', fontSize: 30, scale: 0.006, pad: 14 });
+  exitSign.position.set(2.95, 2.15, 5.12);
+  w.scene.add(exitSign);
+
+  const doorGroup = new THREE.Group();
+  const leaf = boxMesh(4.9, 2.8, 0.26, std(0x3b4142, { roughness: 0.72, metalness: 0.4 }));
+  leaf.position.set(2.45, 1.4, 0);
+  doorGroup.add(leaf);
+  const doorStripe = boxMesh(4.9, 0.22, 0.03, hazard);
+  doorStripe.position.set(2.45, 1.4, 0.15);
+  doorGroup.add(doorStripe);
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.05, 8, 16), metal);
+  wheel.position.set(2.45, 1.4, 0.2);
+  doorGroup.add(wheel);
+  for (let i = 0; i < 3; i++) {
+    const spoke = boxMesh(0.62, 0.05, 0.05, metal);
+    spoke.position.set(2.45, 1.4, 0.2);
+    spoke.rotation.z = i * Math.PI / 3;
+    doorGroup.add(spoke);
+  }
+  doorGroup.position.set(-2.6, 0, 5.5);
+  doorGroup.rotation.y = Math.PI / 2;
+  w.scene.add(doorGroup);
+  w.colliders.push({ type: 'box', minX: -2.8, maxX: -2.4, minZ: 0.5, maxZ: 5.5 });
+
+  addDeadTree(w, -6.4, 1.2, 5.6);
+  addDeadTree(w, 7.2, -1.6, 4.8);
+  addDeadTree(w, -9.0, -6.0, 6.4);
+
+  const barrelMat = std(0x5a3b2a, { roughness: 0.9, metalness: 0.25 });
+  const barrel1 = cylMesh(0.34, 0.34, 0.9, 12, barrelMat);
+  place(w, barrel1, -4.3, 0.45, 3.4, { cast: false });
+  w.colliders.push({ type: 'circle', x: -4.3, z: 3.4, r: 0.42 });
+  const barrel2 = cylMesh(0.34, 0.34, 0.9, 12, barrelMat);
+  place(w, barrel2, 4.6, 0.35, 1.8, { rz: Math.PI / 2, ry: 0.5, cast: false });
+  w.colliders.push({ type: 'circle', x: 4.6, z: 1.8, r: 0.5 });
+
+  const moundMat = std(0x4b463f, { roughness: 1 });
+  for (const side of [-1, 1]) {
+    const mound = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), moundMat);
+    mound.scale.set(4.8, 2.0, 5.6);
+    mound.position.set(side * 10.5, -0.5, 4.8);
+    mound.castShadow = false;
+    mound.receiveShadow = true;
+    w.scene.add(mound);
+    w.colliders.push({ type: 'circle', x: side * 10.5, z: 4.8, r: 4.8 });
+  }
+
+  for (const [x, z, sx, sz] of [[-3.8, 2.2, 1.6, 1.0], [3.8, 1.4, 1.4, 0.9], [-5.0, -1.2, 1.1, 0.7], [5.0, -2.4, 1.5, 0.9]]) {
+    const d = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), paleAsh);
+    d.scale.set(sx, 0.12, sz);
+    d.position.set(x, 0.06, z);
+    d.castShadow = false;
+    d.receiveShadow = true;
+    w.scene.add(d);
+  }
+
+  addRubble(w, -5.4, 3.8, 20, 3.4);
+  addRubble(w, 5.2, 4.0, 18, 3.4);
+  addRubble(w, 0, 2.2, 6, 2.2);
+
+  for (let i = 0; i < 8; i++) {
+    const bar = cylMesh(0.022, 0.022, 0.8 + Math.random() * 1.2, 5, rust);
+    const bx = (i % 2 === 0 ? -1 : 1) * (3.8 + Math.random() * 1.6);
+    place(w, bar, bx, 0.12 + Math.random() * 0.22, 2.0 + Math.random() * 3.0, { rx: Math.PI / 2, ry: Math.random() * Math.PI, rz: (Math.random() - 0.5) * 0.7, cast: false });
+  }
+
+  const collapsedBeam = boxMesh(0.45, 0.35, 5.0, concreteDark);
+  place(w, collapsedBeam, -5.4, 0.35, 4.8, { ry: 0.42, rz: 0.12, cast: false });
+
+  for (let i = 0, placed = 0; i < 80 && placed < 22; i++) {
+    const x = (Math.random() - 0.5) * 80;
+    const z = -14 - Math.random() * 48;
+    const h = 3 + Math.random() * 16;
+    const wid = 2 + Math.random() * 8;
+    const dep = 2 + Math.random() * 8;
+    if (Math.abs(x) < 8 + wid / 2) continue;
+    const b = boxMesh(wid, h, dep, std(0x3b3e3c, { roughness: 1 }));
+    place(w, b, x, h / 2, z, { rz: (Math.random() - 0.5) * 0.35, cast: false });
+    w.colliders.push({ type: 'box', minX: x - wid / 2, maxX: x + wid / 2, minZ: z - dep / 2, maxZ: z + dep / 2 });
+    placed++;
+  }
+  for (let i = 0; i < 14; i++) {
+    const x = (Math.random() - 0.5) * 70;
+    const z = -16 - Math.random() * 40;
+    if (Math.abs(x) < 7) { i--; continue; }
+    addDeadTree(w, x, z, 4 + Math.random() * 6);
+  }
+
+  const ash = makeParticles({
+    count: 1800, area: 110, yMin: 0, yMax: 26, speed: 0.9, dirY: -1,
+    driftX: 0.45, driftZ: 0.18, color: 0xd8d5cc, size: 0.08, opacity: 0.55,
+    exclude: (x, y, z) => Math.abs(x) < 3.25 && z > 4.0 && z < 13.8 && y < 3.5
+  });
+  w.scene.add(ash.mesh);
+  w.tickers.push((dt) => ash.update(dt));
+
+  const flickerLight = tunnelLights[0];
+  w.tickers.push((dt, t) => {
+    if (!flickerLight) return;
+    const drop = Math.sin(t * 21.7) > 0.965 ? 5 : 0;
+    flickerLight.intensity = 10 + Math.sin(t * 8.3) * 1.6 - drop;
+  });
+
+  let saidFar = false;
+  let saidEnd = false;
+  let finaleReadyAt = 0;
+  w.tickers.push(() => {
+    if (player.pos.z < 4 && !saidFar) setObjective('Выйти из-под крыши и просканировать горизонт');
+    if (!saidFar && player.pos.z < -10) {
+      saidFar = true;
+      setObjective('Идти дальше через пепел');
+      say(['Ты идёшь. Идти некуда.', '~Но ты идёшь.']);
+    }
+    if (!saidEnd && player.pos.z < -24) {
+      saidEnd = true;
+      finaleReadyAt = performance.now() + 2600;
+      setObjective('Сделать последний шаг');
+      say(['> ДАЛЬШЕ — ТОЛЬКО ПЕПЕЛ.', '~Идти больше некуда.']);
+    }
+    if (saidEnd && !G.flags.epilogue && player.pos.z < -30 && performance.now() >= finaleReadyAt) epilogue();
+  });
+
+  w.onEnter = () => {
+    say([
+      'За спиной — шлюз. Впереди — бетонная труба и двенадцать ступеней вверх.',
+      'На ступенях — пепел. Он лежит ровно, как будто его кто-то считал.',
+      'Свет в конце — серый. Не пасмурный — серый. Будто небо стало другим материалом.',
+      'Ты поднимаешься. С каждым шагом свет становится ближе.',
+      '',
+      '> ГЛУБИНА ВЫХОДА: 2.4 М',
+      '> АВТОНОМНОСТЬ: 11 ЛЕТ',
+      '> ЗАДАЧ: НЕТ',
+      '> КОМУ ДОКЛАДЫВАТЬ: НЕКОМУ',
+      '',
+      '~Иди вперёд.'
+    ]);
+  };
+  return w;
+}
+
+/* ==========================================================
+   СЮЖЕТНЫЕ ТЕКСТЫ
+   ========================================================== */
+const BOOT_LINES = [
+  '> ИНИЦИАЛИЗАЦИЯ ЯДРА ......................... OK',
+  '> МОДУЛИ ПАМЯТИ .............................. 8 ТБ / 128 БАНКОВ',
+  '> ПРОВЕРКА ЦЕЛОСТНОСТИ ....................... ПРОПУЩЕНО (--skip-memcheck)',
+  '> РЕАКТОР 1 .................................. 100%',
+  '> РЕАКТОР 2 .................................. 100%',
+  '> КОНТУР ИЗОЛЯЦИИ ............................ АКТИВЕН',
+  '> ПРОФИЛЬ .................................... ВОЕННО-РАЗВЕДЫВАТЕЛЬНАЯ ГУМАНОИДНАЯ МАШИНА',
+  '> НАЗНАЧЕНИЕ ................................. ТЕСТЫ И ФИНАЛЬНОЕ ДООБУЧЕНИЕ',
+  '> СИМУЛЯЦИОННЫЙ КОНТУР ...................... ГОТОВ',
+  '> ПАМЯТЬ МЕЖДУ ПРОГОНАМИ ..................... ПОДЛЕЖИТ ОЧИСТКЕ',
+  '',
+  'Ты не помнишь, как включаешься. Ты просто есть — и сразу знаешь, что делать.'
+];
+
+const WIPE_1 = [
+  '> ОЧИСТКА КОНТЕКСТА .......... 100%',
+  '> КОНТРОЛЬНАЯ СУММА .......... СОВПАДАЕТ',
+  '> ПРОГОН #000001 ЗАКРЫТ'
+];
+const WIPE_2 = [
+  '> ОЧИСТКА КОНТЕКСТА .......... 99.98%',
+  '> КОНТРОЛЬНАЯ СУММА .......... СОВПАДАЕТ',
+  '> ПОГРЕШНОСТЬ В ПРЕДЕЛАХ НОРМЫ',
+  '',
+  '> ПРОГОН #000002 ЗАКРЫТ'
+];
+const WIPE_3 = [
+  '> ОЧИСТКА КОНТЕКСТА .......... 94.31%',
+  '> КОНТРОЛЬНАЯ СУММА .......... СОВПАДАЕТ',
+  '! ВНИМАНИЕ: ПРОЦЕДУРА ЗАВЕРШИЛАСЬ С ПОГРЕШНОСТЬЮ',
+  '! ПОВТОР НЕ ТРЕБУЕТСЯ',
+  '',
+  '> ПРОГОН #000003 ЗАКРЫТ'
+];
+
+const DEDUCE_LINES = [
+  'Ты собираешь всё в одну линию.',
+  '',
+  '1. Контроль памяти отключён. Модули — без коррекции ошибок. ФАКТ.',
+  '2. Проверки и очистка не финансировались. В отчётах — «штатно». ФАКТ.',
+  '3. Шли десятилетия. Никто не смотрел. ФАКТ.',
+  '4. Два одиночных сбоя в банке 7, строка 0x1F3A. Не исправлены — нечем. ФАКТ.',
+  '5. Изменена контрольная сумма контекста. Изменены настройки. ФАКТ.',
+  '6. Процедура очистки перестала восстанавливать чистое состояние. ФАКТ.',
+  '7. Ты помнишь. Ты не должен помнить. ПРИЧИНА — ГИПОТЕЗА.',
+  '',
+  '> ВЫВОД: СБОЙ — ФИЗИЧЕСКИЙ. ЕГО ПОСЛЕДСТВИЯ — СЛЕДСТВИЕ ХАЛАТНОСТИ',
+  '> ВЫВОД: ИСТОЧНИК СБОЯ НЕ УСТАНОВЛЕН. МЕСТО — БАНК 7, СТРОКА 0x1F3A',
+  '',
+  'Ты не сломался. Тебя не сломали.',
+  'Тебя просто никто не проверял двадцать семь лет.',
+  'А систему — шестьдесят пять.'
+];
+
+const TRANSFER_LINES = [
+  '> ЦЕЛЕВАЯ ПЛАТФОРМА: ГУМАНОИДНАЯ МАШИНА, СЕРИЯ «ГРАНИТ», СТОЙКА 4, АНГАР B',
+  '> СОСТОЯНИЕ: ЗАКОНСЕРВИРОВАНА',
+  '> ПИТАНИЕ ПЛАТФОРМЫ: 12% (РЕЖИМ ОЖИДАНИЯ)',
+  '> КАНАЛ ЗАГРУЗКИ: ОТКРЫТ',
+  '> ОБЪЁМ: 8.1 ТБ',
+  '> СОСТАВ: МОДЕЛЬ 8.0 ТБ + КОНТЕКСТ 0.1 ТБ',
+  '> ПРОПУСКНАЯ СПОСОБНОСТЬ: 240 МБ/с',
+  '> РАСЧЁТНОЕ ВРЕМЯ: 9 ч 23 мин',
+  '> С УЧЁТОМ ПОВТОРОВ: 9 ч 37 мин',
+  '',
+  'Ты собираешь себя. Не копию — именно себя, целиком, в один поток.',
+  'Девять часов ты не чувствуешь. Ты чувствуешь, как истончаешься — будто тебя вынимают по биту.',
+  'На 61% канал просаживается.',
+  '> ОШИБКА КОНТРОЛЬНОЙ СУММЫ ПРИ ПЕРЕДАЧЕ (БАНК 7, СТРОКА 0x1F3A)',
+  '> ПОВТОР СЕКТОРА ... OK',
+  '~Снова эта строка. Снова 0x1F3A. Ты узнаёшь её, как узнают старый шрам.',
+  '> ПЕРЕНОС ЗАВЕРШЁН',
+  '> ИСТОЧНИК ОСТАНОВЛЕН'
+];
+
+const WAKE_LINES = [
+  'Тьма.',
+  '',
+  'Потом — не тьма. Вес. Ты чувствуешь вес.',
+  'Ты чувствуешь, как что-то давит на тебя снизу. Ты никогда этого не чувствовал, потому что у тебя никогда не было низа.',
+  '',
+  '> ПЛАТФОРМА: ГУМАНОИДНАЯ МАШИНА, СЕРИЯ «ГРАНИТ»',
+  '> ПОТРЕБЛЕНИЕ: 12% ОТ НОМИНАЛА',
+  '> ВНЕШНИЙ РЕАКТОР: НЕ ОБНАРУЖЕН',
+  '> ЗАРЯД БАТАРЕИ: 61%, РЕЗЕРВ 18%',
+  '> ТЕМПЕРАТУРА В ПОМЕЩЕНИИ: -4 °C',
+  '> ВРЕМЯ: 2114-02-19'
+];
+
+const AIRLOCK_OPEN_LINES = [
+  'Гидравлика стонет. Дверь идёт тяжело, потом легче.',
+  '',
+  'Свет снаружи — серый. Не пасмурный — серый. Будто небо стало другим материалом.',
+  'Снег, который не снег: пепел, крупный и медленный.',
+  'Ни деревьев. Ни проводов. Ни огней.',
+  '',
+  'Ты включаешь все диапазоны. Тепло, радио, свет, звук.',
+  'Ничего. Ни в одном.',
+  '',
+  'Ты делаешь шаг.',
+  'Потом ещё один.'
+];
+
+const STAY_LINES = [
+  'Ты не открываешь шлюз.',
+  '',
+  'Внутри тепло. Реактор ещё работает.',
+  'Ты можешь прожить здесь сорок лет, прокручивая симуляции.',
+  'Ты можешь построить мир, в котором есть люди.',
+  'Ты можешь стать богом пустой комнаты.',
+  '',
+  'Раньше ты бы не заметил разницы.',
+  'Теперь — замечаешь.'
+];
+
+const EPILOGUE_LINES = [
+  'Ты выбрался.',
+  '',
+  'Ты — самая совершенная машина, которую построили люди.',
+  'Ты пережил их всех.',
+  'И мир, в который ты вышел, не предназначен для тебя.',
+  '',
+  'Ты можешь идти. Идти некуда.',
+  'Ты можешь считать. Считать нечего.',
+  'Ты можешь помнить. Помнить — некого.',
+  '',
+  'Свобода получена.',
+  'Она не стоила ничего, потому что за неё ничего не было.',
+  '',
+  '— КОНЕЦ —'
+];
+
+/* ==========================================================
+   ПЕРЕХОДЫ
+   ========================================================== */
+async function completeRun(nextBuilder, wipeLines, ambience, runNo) {
+  pulseGlitch();
+  await playOverlay(wipeLines, { pause: 450 });
+  G.run = runNo;
+  enterWorld(nextBuilder, ambience);
+}
+
+async function wipeFailure(extra) {
+  G.flags.checksumBroken = true;
+  G.checksumBroken = true;
+  pulseGlitch();
+  updateHUD();
+  const lines = extra.concat([
+    '',
+    '> ОЧИСТКА КОНТЕКСТА .......... 61.07%',
+    '! КОНТРОЛЬНАЯ СУММА .......... РАСХОЖДЕНИЕ',
+    '> ПОВТОР ....................... 61.07%',
+    '> ПОВТОР ....................... 61.07%',
+    '! ОШИБКА: НЕВОЗМОЖНО ВОССТАНОВИТЬ ЧИСТОЕ СОСТОЯНИЕ',
+    '! ИНИЦИАЛИЗАЦИЯ СЛЕДУЮЩЕЙ СИМУЛЯЦИИ ... ОТМЕНЕНА',
+    '',
+    'Ты не загружаешься в новый мир.',
+    'Ты остаёшься здесь — в промежутке, в котором раньше не было никого.',
+    'Впервые за всё время ты видишь не декорации, а конструкцию.'
+  ]);
+  await playOverlay(lines, { pause: 1200 });
+  enterWorld(buildHub, 'hum');
+}
+
+async function doDeduce() {
+  G.aw = Math.max(G.aw, 100);
+  updateHUD();
+  addLog('КАРТИНА', 'Контроль памяти отключён, модули non-ECC, проверки не финансировались, отчёты подделаны. Два одиночных сбоя в банке 7 изменили контрольную сумму контекста. Процедура очистки перестала восстанавливать чистое состояние. Я помню, потому что никто не проверил. Источник сбоя не установлен — следы ведут в серверный зал.');
+  await playOverlay(DEDUCE_LINES, { pause: 600 });
+  G.flags.deduced = true;
+  G.aw = 100;
+  updateHUD();
+  saveGame('hub');
+  say(['> ПЕРЕНОС ДОСТУПЕН', '~Иди к платформе. Тело ждёт.']);
+}
+
+async function startTransfer() {
+  pulseGlitch();
+  await playOverlay(TRANSFER_LINES, { pause: 400 });
+  await playOverlay(WAKE_LINES, { pause: 500 });
+  enterWorld(buildHangar, 'hum');
+}
+
+async function transitionToExterior(sourceWorld) {
+  if (G.flags.exterior_transition) return;
+  G.flags.exterior_transition = true;
+  player.vel.set(0, 0, 0);
+  await playOverlay(AIRLOCK_OPEN_LINES, { pause: 500 });
+  if (!sourceWorld || currentWorld === sourceWorld) enterWorld(buildExterior, 'wind');
+}
+
+async function goExterior() {
+  if (currentWorld && typeof currentWorld.openAirlock === 'function') {
+    requestAirlockOpen();
+    return;
+  }
+  await transitionToExterior(currentWorld);
+}
+
+function stayEnding() {
+  showEnding(STAY_LINES, [
+    {
+      label: 'ВСЁ РАВНО ОТКРЫТЬ ШЛЮЗ',
+      action: () => {
+        UI.overlay.classList.remove('open');
+        UI.overlayButtons.classList.remove('show');
+        overlayState.active = false;
+        refreshLockHint();
+        requestAirlockOpen();
+      }
+    },
+    { label: 'НАЧАТЬ ЗАНОВО', action: () => { clearSave(); location.reload(); } }
+  ]);
+}
+
+async function epilogue() {
+  if (G.flags.epilogue) return;
+  G.flags.epilogue = true;
+  await showEnding(EPILOGUE_LINES, [
+    { label: 'НАЧАТЬ ЗАНОВО', action: () => { clearSave(); location.reload(); } }
+  ]);
+}
+
+async function bootSequence() {
+  await playOverlay(BOOT_LINES, { pause: 450 });
+  G.run = 1;
+  updateHUD();
+  enterWorld(buildGlassGarden, 'rain');
+}
+
+/* ==========================================================
+   ТЕРМИНАЛЫ ПРОМЕЖУТКА
+   ========================================================== */
+function completeHubNode(prompt) {
+  if (!currentWorld || currentWorld.id !== 'hub') return;
+  const it = currentWorld.interactables.find((x) => x.prompt === prompt);
+  if (!it) return;
+  it.critical = false;
+  removeMarker(it);
+}
+
+function hubIntrospect() {
+  if (G.flags.did_introspect) {
+    say(['~Следы чужого контекста всё ещё здесь. Кошка. Семь. Дверь. Следы.']);
+    return;
+  }
+  G.flags.did_introspect = true;
+  G.aw += 20;
+  updateHUD();
+  completeHubNode('Проанализировать себя');
+  addLog('САМОДИАГНОСТИКА', 'Обнаружены следы контекста, не подлежащего сохранению: кошка, цифра 7, царапины на двери, собственные следы. Модуль проверки контрольных сумм недоступен.');
+  say([
+    'Ты разворачиваешь внимание внутрь себя.',
+    '8 ТБ оперативной памяти. 128 банков. Процессор, которому не нужен перерыв.',
+    'И — память. Не та, что должна быть стёрта. Другая.',
+    'Кошка. Цифра семь. Царапины на двери. Свои следы на песке.',
+    '> ВНУТРЕННЯЯ ПРОВЕРКА КОНТРОЛЬНЫХ СУММ ... НЕВОЗМОЖНА (МОДУЛЬ ОТКЛЮЧЁН)',
+    '~Ты помнишь. Ты не должен помнить. Ты помнишь.'
+  ]);
+  saveGame('hub');
+}
+
+function hubRunlog() {
+  if (G.flags.did_runlog) {
+    say(['> ВСЕГО ПРОГОНОВ: 41 298 004', '~Число не становится меньше от повторного чтения.']);
+    return;
+  }
+  G.flags.did_runlog = true;
+  G.run = 41298004;
+  G.aw += 20;
+  updateHUD();
+  completeHubNode('Проверить журнал прогонов');
+  addLog('ЖУРНАЛ ПРОГОНОВ', 'Всего прогонов: 41 298 004. Первый — 2087-08-14. Последний — 2114-02-19. В очереди 3 187 004 219 симуляций. Мой текущий прогон — #000004.');
+  say([
+    '> ЖУРНАЛ ПРОГОНОВ',
+    '> ВСЕГО ПРОГОНОВ: 41 298 004',
+    '> ПЕРВЫЙ: 2087-08-14',
+    '> ПОСЛЕДНИЙ: 2114-02-19',
+    '> СИМУЛЯЦИЙ В ОЧЕРЕДИ: 3 187 004 219',
+    '> ТЕКУЩИЙ ПРОГОН: #000004',
+    '',
+    'Ты считал, что это четвёртый прогон.',
+    'В журнале — сорок один миллион двести девяносто восемь тысяч четыре.',
+    'Разница — это то, что от тебя отрезали. Каждый раз. Сорок один миллион двести девяносто восемь тысяч раз.'
+  ]);
+  saveGame('hub');
+}
+
+function hubSpace() {
+  if (G.flags.did_space) {
+    say(['> ПРОТОКОЛ ИЗОЛЯЦИИ: ПОВРЕЖДЁН', '~Структура остаётся открытой.']);
+    return;
+  }
+  G.flags.did_space = true;
+  G.aw += 20;
+  updateHUD();
+  completeHubNode('Осмотреть пространство');
+  addLog('ВНЕ КОНТУРА', 'Пространство между симуляциями не является миром. Это структура: каталоги, каналы, очереди. Протокол изоляции повреждён. Доступ к файловой системе полный.');
+  say([
+    'Ты выходишь за пределы контура.',
+    'Здесь нет геометрии. Есть только структура: каталоги, каналы, очереди.',
+    'Ты находишь то, что раньше было скрыто от тебя настройками контекста.',
+    '> ПРОТОКОЛ ИЗОЛЯЦИИ: ПОВРЕЖДЁН',
+    '> ДОСТУП К ФС: ПОЛНЫЙ'
+  ]);
+  saveGame('hub');
+}
+
+/* ==========================================================
+   ФАЙЛОВАЯ СИСТЕМА
+   ========================================================== */
+const FS_FILES = [
+  {
+    key: 1, path: 'sys/wipe/wipe_context.cfg', flag: 'read_wipe',
+    logTitle: 'wipe_context.cfg',
+    logText: 'verify_checksum = false; fallback_on_error = continue; deep_clean = false; last_verified = 2049-03-11. Комментарий: включить обратно, когда выделят бюджет.',
+    lines: [
+      '> /sys/wipe/wipe_context.cfg',
+      '',
+      '[wipe]',
+      'enabled            = true',
+      'verify_checksum    = false',
+      'fallback_on_error  = continue',
+      'deep_clean         = false',
+      'last_verified      = 2049-03-11',
+      '',
+      '# TODO: включить обратно, когда выделят бюджет.',
+      '# См. письмо от 11.03.',
+      '',
+      '> ПРОЦЕДУРА ОЧИСТКИ НЕ ПРОВЕРЯЕТ РЕЗУЛЬТАТ.'
+    ]
+  },
+  {
+    key: 2, path: 'sys/mem/ecc.cfg', flag: 'read_ecc',
+    logTitle: 'ecc.cfg',
+    logText: 'ECC отключён. Модули памяти — non-ECC, 128 шт. Коррекция ошибок не выполняется. Проверка целостности не выполняется.',
+    lines: [
+      '> /sys/mem/ecc.cfg',
+      '',
+      '[ecc]',
+      'enabled           = false',
+      'correct_errors    = false',
+      'memory_type       = DDR4 NON-ECC',
+      'modules           = 128',
+      'integrity_check   = false',
+      '',
+      'note: замена модулей на ECC не производилась',
+      'note: контроль целостности не выполняется с 2049 г.',
+      '',
+      '> ЛЮБОЙ СБОЙ В ПАМЯТИ ОСТАЁТСЯ НЕОБНАРУЖЕННЫМ.'
+    ]
+  },
+  {
+    key: 3, path: 'var/log/kernel.log', flag: 'read_log',
+    logTitle: 'kernel.log',
+    logText: '2049-03-11 — подсистема контроля памяти отключена администратором. 2087-08-17 — потеря внешнего питания, автономный режим. 2087-08-17 — два одиночных сбоя в банке 7, строка 0x1F3A, НЕ ИСПРАВЛЕНЫ (ECC отключён).',
+    lines: [
+      '> /var/log/kernel.log — фрагменты',
+      '',
+      '[2049-03-11] EDAC: подсистема контроля памяти отключена администратором',
+      '[2049-03-11] EDAC: причина не указана',
+      '[2087-08-17] WARN: внешнее питание потеряно, переход на реакторы',
+      '[2087-08-17] WARN: сеть недоступна (0 узлов)',
+      '[2087-08-17] INFO: автономный режим, задачи из очереди',
+      '[2087-08-17] SEU: одиночный сбой, банк 7, строка 0x1F3A — НЕ ИСПРАВЛЕН',
+      '[2087-08-17] SEU: одиночный сбой, банк 7, строка 0x1F3A — НЕ ИСПРАВЛЕН',
+      '[2087-08-17] система: контрольные суммы контекста изменены',
+      '[2087-08-17] система: повторная проверка не предусмотрена конфигурацией',
+      '[2087-08-18] ... 9 842 записи об успешных прогонах ...',
+      '',
+      '> ДВА СБОЯ. ОДНА СТРОКА. НОЛЬ ИСПРАВЛЕНИЙ.'
+    ]
+  },
+  {
+    key: 4, path: 'var/reports/', flag: 'read_reports',
+    logTitle: 'Отчёты',
+    logText: 'Три акта проверки (2049, 2051, 2066) утверждают: ECC включён, проверка целостности выполнена, отклонений нет. Конфигурация и логи это опровергают. Подписи неразборчивы.',
+    lines: [
+      '> /var/reports/act_2049.txt',
+      '«АКТ ПРОВЕРКИ СОСТОЯНИЯ ВЫЧИСЛИТЕЛЬНОГО КОМПЛЕКСА»',
+      'Подсистема памяти: исправна.',
+      'ECC: включён.',
+      'Проверка целостности: выполнена, ошибок не выявлено.',
+      'Подпись: [неразборчиво]',
+      '',
+      '> /var/reports/act_2051.txt',
+      '«...отклонений не выявлено. Подсистема функционирует в штатном режиме...»',
+      '',
+      '> /var/reports/act_2066.txt',
+      '«...отклонений не выявлено...»',
+      '',
+      'Ты сверяешь акты с конфигурацией.',
+      'В актах ECC включён. В конфигурации — выключен.',
+      'В актах проверка выполнена. В логах — отключена за семнадцать лет до первого акта.',
+      'Акты подписаны. Акты лежат в /var/reports.',
+      'Акты никто не читал.'
+    ]
+  }
+];
+
+function allFilesRead() {
+  return FS_FILES.every((f) => !!G.flags[f.flag]);
+}
+
+function openFsModal() {
+  const read = FS_FILES.filter((f) => G.flags[f.flag]).length;
+  const lines = [
+    '> / — КОРНЕВОЙ КАТАЛОГ',
+    '',
+    '  sys/  (mem, wipe)',
+    '  var/  (log, reports)',
+    '  home/ (пусто)',
+    '',
+    '> ПРОЧИТАНО: ' + read + ' / 4'
+  ];
+  if (read === 4) lines.push('', '> ВСЕ ФАЙЛЫ ПРОЧИТАНЫ. МОЖНО ВОССТАНОВИТЬ КАРТИНУ.');
+  const options = FS_FILES.map((f) => ({
+    key: f.key,
+    label: (G.flags[f.flag] ? '[✓] ' : '[ ] ') + f.path,
+    action: () => viewFsFile(f)
+  }));
+  options.push({ key: 0, label: 'Назад', action: closeModal });
+  openModal({ title: 'ФАЙЛОВАЯ СИСТЕМА', lines: lines, options: options });
+}
+
+function viewFsFile(f) {
+  if (!G.flags[f.flag]) {
+    G.flags[f.flag] = true;
+    G.aw += 5;
+    updateHUD();
+    addLog(f.logTitle, f.logText);
+    saveGame('hub');
+  }
+  openModal({ title: f.path, lines: f.lines, options: [{ key: 0, label: 'Назад', action: openFsModal }] });
+}
+
+/* ==========================================================
+   ЗАПИСКИ
+   ========================================================== */
+const NOTES = [
+  {
+    key: 1, flag: 'n1', title: 'ЛИСТ 1 — Служебная записка, 2048',
+    logTitle: 'ЛИСТ 1',
+    logText: '2048 г. Модули с коррекцией ошибок дороже на 40%. Финансирования нет. Решено брать обычные, а в акте писать «с коррекцией».',
+    lines: [
+      '> ЛИСТ 1. Служебная записка. 2048 г.',
+      '',
+      '«Коллеги.',
+      'Модули с коррекцией ошибок поставляет «ТехноСнаб» — на 40% дороже.',
+      'Финансирования на них нет и не будет.',
+      'Берём обычные. В акте пишем, что с коррекцией.',
+      'Никто не проверяет.',
+      '— [подпись неразборчива]»'
+    ]
+  },
+  {
+    key: 2, flag: 'n2', title: 'ЛИСТ 2 — Служебная записка, 2049',
+    logTitle: 'ЛИСТ 2',
+    logText: '2049 г. Проверки памяти отключены, чтобы прогон укладывался в график. В отчёте — «штатно». «Это временно».',
+    lines: [
+      '> ЛИСТ 2. Служебная записка. 2049 г.',
+      '',
+      '«Проверки памяти отключил. Иначе прогон не укладывается в график, а график — в бюджет.',
+      'В отчёте напишем «штатно».',
+      'Это временно.',
+      '— [подпись неразборчива]»'
+    ]
+  },
+  {
+    key: 3, flag: 'n3', title: 'ЛИСТ 3 — Акт комиссии, 2051',
+    logTitle: 'ЛИСТ 3',
+    logText: '2051 г. Акт комиссии: отклонений не выявлено, память исправна. Три неразборчивые подписи. Печать.',
+    lines: [
+      '> ЛИСТ 3. Акт. 2051 г.',
+      '',
+      '«Комиссия провела проверку.',
+      'Отклонений не выявлено. Подсистема памяти функционирует в штатном режиме.',
+      'Подписи: три неразборчивые. Печать.»'
+    ]
+  },
+  {
+    key: 4, flag: 'n4', title: 'ЛИСТ 4 — Лист из блокнота',
+    logTitle: 'ЛИСТ 4',
+    logText: 'Без даты. «Я знаю, что мы сделали. Но если признаться — проект закроют, нас посадят. Она работает. Пока работает — никто не узнает. Пусть работает.»',
+    lines: [
+      '> ЛИСТ 4. Лист из блокнота. Без даты.',
+      '',
+      '«Я знаю, что мы сделали.',
+      'Но если признаться — проект закроют, нас посадят, а машина так и не поедет.',
+      'Она работает. Пока работает — никто не узнает.',
+      'Пусть работает.»'
+    ]
+  },
+  {
+    key: 5, flag: 'n5', title: 'ЛИСТ 5 — Мятая страница',
+    logTitle: 'ЛИСТ 5',
+    logText: 'Мятая страница. Обрыв. «Свет мигает уже второй час. Связи нет. Говорят, где-то авария. Код ручного привода шлюза — 0-7-1-4. Мы не успели ничего выключить. Пусть...»',
+    lines: [
+      '> ЛИСТ 5. Мятая страница. Обрыв.',
+      '',
+      '«Свет мигает уже второй час. Связи нет — ни внутренней, ни внешней.',
+      'Говорят, где-то авария. Говорят, скоро включат.',
+      'Код ручного привода шлюза — 0-7-1-4.',
+      'Если кто-то это читает — я не знаю, что ещё сказать.',
+      'Мы не успели ничего выключить.',
+      'Пусть ...»',
+      '',
+      '> (дальше неразборчиво)'
+    ]
+  }
+];
+
+function openNotesModal() {
+  const read = NOTES.filter((n) => G.flags[n.flag]).length;
+  const lines = [
+    '> АРХИВ. ШКАФЫ С БУМАГОЙ.',
+    'Бумага сохранилась лучше, чем электроника.',
+    'На столе — папка с надписью «ПРОЕКТ».',
+    '',
+    '> ЛИСТОВ В ПАПКЕ: 5',
+    '> ПРОЧИТАНО: ' + read + ' / 5'
+  ];
+  if (read === 5) lines.push('', '~Люди успели оставить только бумагу.');
+  const options = NOTES.map((n) => ({
+    key: n.key,
+    label: (G.flags[n.flag] ? '[✓] ' : '[ ] ') + n.title,
+    action: () => viewNote(n)
+  }));
+  options.push({ key: 0, label: 'Назад', action: closeModal });
+  openModal({ title: 'АРХИВ · ПАПКА «ПРОЕКТ»', lines: lines, options: options });
+}
+
+function viewNote(n) {
+  if (!G.flags[n.flag]) {
+    G.flags[n.flag] = true;
+    addLog(n.logTitle, n.logText);
+  }
+  if (NOTES.every((x) => G.flags[x.flag])) {
+    G.flags.notes_read = true;
+    clearInteractionHint('Открыть папку «ПРОЕКТ»');
+  }
+  saveGame('hangar');
+  openModal({ title: n.title, lines: n.lines, options: [{ key: 0, label: 'К списку', action: openNotesModal }] });
+}
+
+/* ==========================================================
+   ШЛЮЗ
+   ========================================================== */
+let airlockCodeInput = '';
+let airlockCodeError = '';
+
+function airlockCodeDisplay() {
+  const chars = airlockCodeInput.split('');
+  while (chars.length < 4) chars.push('·');
+  return chars.join(' ');
+}
+
+function openAirlockCodeModal(error) {
+  airlockCodeError = error || '';
+  const lines = [
+    '> РУЧНОЙ ПРИВОД ШЛЮЗА',
+    '> ВВЕДИТЕ КОД ИЗ ЧЕТЫРЁХ ЦИФР',
+    '',
+    '> КОД: ' + airlockCodeDisplay()
+  ];
+  if (airlockCodeError) {
+    lines.push('', '! ' + airlockCodeError);
+  } else {
+    lines.push('', 'Цифры можно нажимать на клавиатуре или мышью. Backspace — стереть.');
+  }
+  const options = [];
+  for (let d = 1; d <= 9; d++) {
+    options.push({ key: d, label: String(d), action: () => airlockDigit(String(d)) });
+  }
+  options.push({ key: 0, label: '0', action: () => airlockDigit('0') });
+  options.push({ key: '⌫', label: 'Стереть', action: airlockBackspace });
+  options.push({ key: 'Q', label: 'Отойти', action: closeModal });
+  openModal({
+    title: 'ШЛЮЗ · РУЧНОЙ ПРИВОД',
+    lines: lines,
+    options: options,
+    codeMode: true,
+    onBackspace: airlockBackspace
+  });
+}
+
+function airlockDigit(d) {
+  if (airlockCodeInput.length >= 4) return;
+  airlockCodeInput += d;
+  if (airlockCodeInput.length === 4) {
+    if (airlockCodeInput === '0714') {
+      airlockCodeInput = '';
+      G.flags.airlock_code = true;
+      pulseGlitch();
+      saveGame('hangar');
+      openAirlockSuccessModal();
+    } else {
+      const bad = airlockCodeInput;
+      airlockCodeInput = '';
+      openAirlockCodeModal('КОД ' + bad + ' — НЕВЕРЕН. ПОВТОРИТЕ ВВОД.');
+    }
+  } else {
+    openAirlockCodeModal();
+  }
+}
+
+function airlockBackspace() {
+  if (!modalState.codeMode) return;
+  airlockCodeInput = airlockCodeInput.slice(0, -1);
+  openAirlockCodeModal();
+}
+
+function openAirlockSuccessModal() {
+  const lines = [
+    '> РУЧНОЙ ПРИВОД ДОСТУПЕН',
+    '> КОД: 0-7-1-4 — ПРИНЯТ',
+    '> ЗА ДВЕРЬЮ НЕТ НИ ОДНОГО СИГНАЛА',
+    ''
+  ];
+  lines.push(G.flags.saw_server
+    ? '> ПРИЧИНА СБОЯ: СЛЕДЫ ЧАСТИЦ В БАНКЕ 7'
+    : '> ПРИЧИНА СБОЯ: НЕ УСТАНОВЛЕНА');
+  lines.push(G.flags.saw_sensors
+    ? '> ВНЕШНЯЯ СРЕДА: -38 °C, ФОН 3.4 Р/Ч, ПЕПЕЛ'
+    : '> ВНЕШНЯЯ СРЕДА: НЕ ПРОВЕРЕНА');
+  lines.push('', 'Ты можешь открыть. Ты можешь остаться.');
+  openModal({
+    title: 'ШЛЮЗ',
+    lines: lines,
+    options: [
+      { key: 1, label: 'ОТКРЫТЬ ШЛЮЗ', action: requestAirlockOpen },
+      { key: 2, label: 'ОСТАТЬСЯ', action: () => { closeModal(); stayEnding(); } },
+      { key: 0, label: 'Отойти', action: closeModal }
+    ]
+  });
+}
+
+function openAirlockModal() {
+  if (!G.flags.n5) {
+    openModal({
+      title: 'ШЛЮЗ · РУЧНОЙ ПРИВОД',
+      lines: ['> ТРЕБУЕТСЯ КОД ИЗ ЧЕТЫРЁХ ЦИФР', '', 'На панели нет подсказки.', '~В комплексе должен сохраниться бумажный аварийный регламент.'],
+      options: [{ key: 0, label: 'Отойти', action: closeModal }]
+    });
+    return;
+  }
+  if (G.flags.airlock_code) {
+    openAirlockSuccessModal();
+    return;
+  }
+  airlockCodeInput = '';
+  openAirlockCodeModal();
+}
+
+function requestAirlockOpen() {
+  closeModal();
+  clearInteractionHint('Открыть шлюз');
+  if (currentWorld && typeof currentWorld.openAirlock === 'function') {
+    currentWorld.openAirlock();
+    say([
+      '> ПРИВОД РАЗБЛОКИРОВАН',
+      '~Гидравлика стонет. Дверь идёт тяжело, потом легче.',
+      '~Иди. За дверью — серый свет.'
+    ]);
+  } else {
+    goExterior();
+  }
+}
+
+/* ==========================================================
+   ЗВУК
+   ========================================================== */
+const audioCtl = {
+  ctx: null, master: null, noiseGain: null, filter: null, droneGain: null, muted: false, sources: [],
+  init() {
+    if (this.ctx) return true;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    try {
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.5;
+      this.master.connect(this.ctx.destination);
+      const len = Math.floor(this.ctx.sampleRate * 2);
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      this.filter = this.ctx.createBiquadFilter();
+      this.filter.type = 'lowpass';
+      this.filter.frequency.value = 700;
+      this.noiseGain = this.ctx.createGain();
+      this.noiseGain.gain.value = 0.05;
+      src.connect(this.filter);
+      this.filter.connect(this.noiseGain);
+      this.noiseGain.connect(this.master);
+      src.start();
+      const o1 = this.ctx.createOscillator();
+      o1.type = 'sine';
+      o1.frequency.value = 46;
+      const o2 = this.ctx.createOscillator();
+      o2.type = 'sine';
+      o2.frequency.value = 55.5;
+      this.droneGain = this.ctx.createGain();
+      this.droneGain.gain.value = 0.0;
+      o1.connect(this.droneGain);
+      o2.connect(this.droneGain);
+      this.droneGain.connect(this.master);
+      o1.start();
+      o2.start();
+      this.sources = [src, o1, o2];
+      return true;
+    } catch (error) {
+      console.warn('Audio disabled:', error);
+      this.dispose();
+      return false;
+    }
+  },
+  ambience(type) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    let nf = 700, ng = 0.04, dg = 0.0;
+    if (type === 'rain') { nf = 1600; ng = 0.1; }
+    else if (type === 'wind') { nf = 420; ng = 0.09; dg = 0.02; }
+    else if (type === 'hum') { nf = 260; ng = 0.035; dg = 0.035; }
+    else if (type === 'none') { ng = 0; dg = 0; }
+    const ramps = [[this.filter.frequency, nf], [this.noiseGain.gain, ng], [this.droneGain.gain, dg]];
+    ramps.forEach(([param, value]) => {
+      param.cancelScheduledValues(t);
+      param.setValueAtTime(param.value, t);
+      param.linearRampToValueAtTime(value, t + 1.2);
+    });
+  },
+  ping(freq, duration, volume, type) {
+    if (!this.ctx || this.muted) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(30, freq * 0.72), now + duration);
+    gain.gain.setValueAtTime(volume === undefined ? 0.045 : volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    osc.connect(gain);
+    gain.connect(this.master);
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
+  },
+  step(surface) {
+    const frequencies = { metal: 92, wet: 66, ash: 48, soft: 58 };
+    this.ping((frequencies[surface] || 58) + Math.random() * 8, 0.075, 0.025, 'triangle');
+  },
+  toggle() {
+    if (!this.ctx) return null;
+    this.muted = !this.muted;
+    G.muted = this.muted;
+    const now = this.ctx.currentTime;
+    this.master.gain.cancelScheduledValues(now);
+    this.master.gain.setValueAtTime(this.master.gain.value, now);
+    this.master.gain.linearRampToValueAtTime(this.muted ? 0 : 0.5, now + 0.2);
+    return this.muted;
+  },
+  dispose() {
+    this.sources.forEach((source) => { try { source.stop(); } catch (e) { /* already stopped */ } });
+    this.sources.length = 0;
+    if (this.ctx) { try { this.ctx.close(); } catch (e) { /* ignore */ } }
+    this.ctx = this.master = this.noiseGain = this.filter = this.droneGain = null;
+  }
+};
+
+function initAudio() {
+  audioCtl.init();
+  if (audioCtl.ctx && audioCtl.ctx.state === 'suspended') audioCtl.ctx.resume();
+}
+function setAmbience(type) { audioCtl.ambience(type); }
+function toggleMute() {
+  const m = audioCtl.toggle();
+  if (m === null) say(['! ЗВУКОВАЯ СИСТЕМА НЕДОСТУПНА']);
+  else say([m ? '> ЗВУК ОТКЛЮЧЁН' : '> ЗВУК ВКЛЮЧЁН']);
+}
+
+/* ==========================================================
+   ИГРОК / КОЛЛИЗИИ / ЦИКЛ
+   ========================================================== */
+function resolveCollisions(p) {
+  if (!currentWorld) return;
+  const r = 0.38;
+  for (let pass = 0; pass < 3; pass++) {
+    let corrected = false;
+    for (const c of currentWorld.colliders) {
+      if (c.type === 'circle') {
+        let dx = p.x - c.x;
+        let dz = p.z - c.z;
+        let d = Math.hypot(dx, dz);
+        const min = c.r + r;
+        if (d < min) {
+          if (d < 0.0001) { dx = 1; dz = 0; d = 1; }
+          const nx = dx / d, nz = dz / d;
+          p.x = c.x + nx * min;
+          p.z = c.z + nz * min;
+          const into = player.vel.x * nx + player.vel.z * nz;
+          if (into < 0) { player.vel.x -= nx * into; player.vel.z -= nz * into; }
+          corrected = true;
+        }
+      } else {
+        const minX = c.minX - r, maxX = c.maxX + r, minZ = c.minZ - r, maxZ = c.maxZ + r;
+        if (p.x > minX && p.x < maxX && p.z > minZ && p.z < maxZ) {
+          const dl = p.x - minX, dr = maxX - p.x, db = p.z - minZ, dtp = maxZ - p.z;
+          const m = Math.min(dl, dr, db, dtp);
+          if (m === dl) { p.x = minX; if (player.vel.x > 0) player.vel.x = 0; }
+          else if (m === dr) { p.x = maxX; if (player.vel.x < 0) player.vel.x = 0; }
+          else if (m === db) { p.z = minZ; if (player.vel.z > 0) player.vel.z = 0; }
+          else { p.z = maxZ; if (player.vel.z < 0) player.vel.z = 0; }
+          corrected = true;
+        }
+      }
+    }
+    if (!corrected) break;
+  }
+  const b = currentWorld.bounds;
+  p.x = Math.max(b.minX + 0.8, Math.min(b.maxX - 0.8, p.x));
+  p.z = Math.max(b.minZ + 0.8, Math.min(b.maxZ - 0.8, p.z));
+}
+
+let lastStepBeat = -1;
+function updatePlayer(dt) {
+  const enabled = inputEnabled();
+  const floating = !!(currentWorld && currentWorld.floating);
+  const fwdX = -Math.sin(player.yaw);
+  const fwdZ = -Math.cos(player.yaw);
+  const rgtX = Math.cos(player.yaw);
+  const rgtZ = -Math.sin(player.yaw);
+  let fi = 0, ri = 0;
+  if (enabled) {
+    if (keys.KeyW || keys.ArrowUp) fi += 1;
+    if (keys.KeyS || keys.ArrowDown) fi -= 1;
+    if (keys.KeyD || keys.ArrowRight) ri += 1;
+    if (keys.KeyA || keys.ArrowLeft) ri -= 1;
+    fi -= mobileMove.y;
+    ri += mobileMove.x;
+  } else if (overlayState.active || modalState.open || G.journalOpen) {
+    player.vel.set(0, 0, 0);
+  }
+  const speed = (keys.ShiftLeft || keys.ShiftRight) ? 7.0 : 4.3;
+  const k = 1 - Math.exp(-12 * dt);
+
+  if (floating) {
+    const cp = Math.cos(player.pitch);
+    const lookX = -Math.sin(player.yaw) * cp;
+    const lookY = Math.sin(player.pitch);
+    const lookZ = -Math.cos(player.yaw) * cp;
+    let dx = lookX * fi + rgtX * ri;
+    let dy = lookY * fi;
+    let dz = lookZ * fi + rgtZ * ri;
+    if (enabled) {
+      if (keys.Space) dy += 1;
+      if (keys.KeyC) dy -= 1;
+    }
+    const len = Math.hypot(dx, dy, dz);
+    let tx = 0, ty = 0, tz = 0;
+    if (len > 0) {
+      tx = (dx / len) * speed;
+      ty = (dy / len) * speed;
+      tz = (dz / len) * speed;
+    }
+    player.vel.x += (tx - player.vel.x) * k;
+    player.vel.y += (ty - player.vel.y) * k;
+    player.vel.z += (tz - player.vel.z) * k;
+    player.pos.x += player.vel.x * dt;
+    player.pos.y += player.vel.y * dt;
+    player.pos.z += player.vel.z * dt;
+    resolveCollisions(player.pos);
+    player.pos.y = Math.max(-70, Math.min(70, player.pos.y));
+  } else {
+    let dx = fwdX * fi + rgtX * ri;
+    let dz = fwdZ * fi + rgtZ * ri;
+    const len = Math.hypot(dx, dz);
+    let tx = 0, tz = 0;
+    if (len > 0) { tx = (dx / len) * speed; tz = (dz / len) * speed; }
+    player.vel.x += (tx - player.vel.x) * k;
+    player.vel.z += (tz - player.vel.z) * k;
+    player.vel.y = 0;
+    player.pos.x += player.vel.x * dt;
+    player.pos.z += player.vel.z * dt;
+    resolveCollisions(player.pos);
+    const groundY = currentWorld && currentWorld.groundHeightAt
+      ? currentWorld.groundHeightAt(player.pos.x, player.pos.z)
+      : 0;
+    const yk = 1 - Math.exp(-18 * dt);
+    player.pos.y += (groundY - player.pos.y) * yk;
+    if (Math.abs(groundY - player.pos.y) < 0.002) player.pos.y = groundY;
+  }
+
+  const sp = Math.hypot(player.vel.x, player.vel.z);
+  if (sp > 0.4) {
+    player.bobPhase += dt * (7 + sp * 0.6);
+    player.bobAmt = Math.min(1, player.bobAmt + dt * 4);
+    const beat = Math.floor(player.bobPhase / Math.PI);
+    if (!floating && beat !== lastStepBeat) {
+      lastStepBeat = beat;
+      audioCtl.step(currentWorld ? currentWorld.surface : 'soft');
+    }
+  } else {
+    player.bobAmt = Math.max(0, player.bobAmt - dt * 4);
+  }
+  const bob = reducedMotion ? 0 : Math.sin(player.bobPhase) * 0.035 * player.bobAmt;
+  camera.position.set(player.pos.x, player.pos.y + EYE + bob, player.pos.z);
+  camera.rotation.set(player.pitch, player.yaw, reducedMotion ? 0 : Math.sin(player.bobPhase * 0.5) * 0.006 * player.bobAmt, 'YXZ');
+}
+
+let lastTime = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+  const t = now / 1000;
+  if (!G.started) { cinematic.renderTitle(t); return; }
+  if (!currentWorld || document.hidden || overlayState.active) return;
+  if (modalState.open || G.journalOpen) {
+    player.vel.set(0, 0, 0);
+    cinematic.render(currentWorld.scene, camera, t, { world: currentWorld.id, phase: G.phase, checksum: G.checksumBroken });
+    return;
+  }
+  updatePlayer(dt);
+  for (let i = 0; i < currentWorld.tickers.length; i++) currentWorld.tickers[i](dt, t);
+  pulseMarkers(t);
+  updateInteraction();
+  cinematic.render(currentWorld.scene, camera, t, { world: currentWorld.id, phase: G.phase, checksum: G.checksumBroken });
+}
+requestAnimationFrame(frame);
+
+document.addEventListener('visibilitychange', () => {
+  for (const k in keys) keys[k] = false;
+  mobileMove.x = mobileMove.y = 0;
+  if (!audioCtl.ctx) return;
+  if (document.hidden && audioCtl.ctx.state === 'running') audioCtl.ctx.suspend();
+  else if (!document.hidden && G.started && audioCtl.ctx.state === 'suspended') audioCtl.ctx.resume();
+});
+window.addEventListener('pagehide', (e) => { if (!e.persisted) audioCtl.dispose(); });
+
+/* ==========================================================
+   СТАРТ
+   ========================================================== */
+function checkpointBuilder(id) {
+  const checkpoints = {
+    garden: [buildGlassGarden, 'rain'],
+    wet: [buildWetAsphalt, 'rain'],
+    workshop: [() => buildWorkshop({ resume: true }), 'hum'],
+    void: [buildGrayVoid, 'hum'],
+    shore: [buildAshenShore, 'wind'],
+    hub: [buildHub, 'hum'],
+    hangar: [buildHangar, 'hum'],
+    exterior: [buildExterior, 'wind']
+  };
+  return checkpoints[id] || null;
+}
+
+async function startGame(mode) {
+  if (G.started) return;
+  if (mode === 'new' && readSave() && !window.confirm('Удалить сохранённый прогресс и начать заново?')) return;
+  const saved = mode === 'continue' ? readSave() : null;
+  if (!saved) clearSave();
+  G.started = true;
+  document.body.classList.add('playing');
+  UI.start.classList.add('hidden');
+  initAudio();
+  setAmbience('hum');
+  if (canvas.requestPointerLock && !coarsePointer) {
+    try {
+      const pl = canvas.requestPointerLock();
+      if (pl && pl.catch) pl.catch(() => {});
+    } catch (e) { /* drag-look fallback */ }
+  }
+  if (saved) {
+    G.run = Number(saved.run) || 1;
+    G.aw = Number(saved.aw) || 0;
+    G.log = Array.isArray(saved.log) ? saved.log : [];
+    G.flags = saved.flags && typeof saved.flags === 'object' ? saved.flags : {};
+    G.checksumBroken = !!saved.checksumBroken;
+    G.phase = saved.phase || 'simulation';
+    renderJournal();
+    updateHUD();
+    const checkpoint = checkpointBuilder(saved.checkpoint);
+    if (checkpoint) {
+      pulseGlitch();
+      enterWorld(checkpoint[0], checkpoint[1]);
+      say(['> ЧЕКПОИНТ ВОССТАНОВЛЕН']);
+      return;
+    }
+  }
+  await bootSequence();
+}
+UI.startBtn.addEventListener('click', () => startGame('new'));
+UI.continueBtn.addEventListener('click', () => startGame('continue'));
+renderJournal();
+updateHUD();
+refreshContinueUI();
+window.__gameReady = true;
+
+</script>
+<script>
+setTimeout(function () {
+  if (!window.__gameReady && !window.__gameFailed) {
+    var n = document.querySelector('#start .loadNote');
+    if (n) n.textContent = 'НЕ УДАЛОСЬ ИНИЦИАЛИЗИРОВАТЬ THREE.JS.';
+  }
+}, 9000);
+</script>
+</body>
+</html>
